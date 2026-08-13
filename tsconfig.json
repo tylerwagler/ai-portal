@@ -23,10 +23,10 @@
     "noUncheckedSideEffectImports": true,
     "jsx": "react-jsx",
 
-    /* Path Mappings */
-    "baseUrl": ".",
+    /* Path Mappings — resolved relative to this file. TypeScript 7 removed
+       baseUrl, so the mapping must be an explicitly relative path. */
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"]

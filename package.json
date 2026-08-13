@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "postbuild": "node scripts/verify-build.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "test": "vitest",
@@ -17,28 +18,27 @@
     "test:run": "vitest run"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.18",
-    "@testing-library/jest-dom": "^6.6.3",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
-    "@types/node": "^20.19.43",
-    "@vitejs/plugin-react": "^5.1.2",
+    "@types/node": "^22.20.1",
+    "@vitejs/plugin-react": "^5.2.0",
     "@vitest/coverage-v8": "^4.1.10",
     "@vitest/ui": "^4.1.10",
-    "jsdom": "^25.0.1",
-    "msw": "^2.7.0",
+    "jsdom": "^29.1.1",
     "typescript": "~5.9.3",
     "vite": "^7.3.6",
     "vitest": "^4.1.10"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.48.1",
-    "@tanstack/react-query": "^5.90.20",
-    "@types/react": "^19.2.9",
-    "@types/react-dom": "^19.2.3",
-    "lucide-react": "^0.563.0",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "recharts": "^3.7.0"
+    "@tanstack/react-query": "^5.101.4",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "lucide-react": "^1.31.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "recharts": "^3.10.1"
   }
 }

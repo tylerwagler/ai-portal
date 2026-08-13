@@ -13,6 +13,22 @@
   --color-accent-green: #22c55e;
   --color-accent-red: #ef4444;
   --color-accent-orange: #f97316;
+
+  /*
+   * Ported from the old tailwind.config.js. Tailwind 4 does not read that file
+   * unless it is pulled in with @config, so these keyframes were being dropped
+   * and `animate-shimmer` compiled to nothing.
+   */
+  --animate-shimmer: shimmer 2s infinite;
+
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
 }
 
 @layer base {

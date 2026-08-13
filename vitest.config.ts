@@ -16,11 +16,7 @@ export default defineConfig({
         'src/test/',
         '*.config.ts',
         'src/main.tsx',
-        'src/vite-env.d.ts',
-        'src/main.ts',
-        'src/counter.ts',
-        'src/test.tsx',
-        'src/typescript.svg'
+        'src/vite-env.d.ts'
       ],
       thresholds: {
         lines: 60,

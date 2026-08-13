@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
+import { SSEDecoder } from '../../lib/sse';
 import { Send, Loader2, AlertCircle, Zap, User, Bot, Activity, ChevronDown, ChevronRight, Brain, CheckCircle, XCircle, Clock, Save, FolderOpen, Plus, Trash2 } from 'lucide-react';
 
 interface Message {
@@ -360,50 +361,52 @@ export const ChatInterface = () => {
                 throw new Error('Response body is not readable');
             }
 
+            // SSE frames are not aligned to network chunks, so decoding is buffered
+            // (see SSEDecoder) — parsing each chunk in isolation drops any frame
+            // that straddled a boundary.
+            const sse = new SSEDecoder();
+
+            const handlePayload = (data: string) => {
+                try {
+                    const parsed = JSON.parse(data);
+                    const delta = parsed.choices?.[0]?.delta?.content;
+
+                    if (delta) {
+                        accumulatedContent += delta;
+
+                        // Update the message in real-time
+                        setMessages(prev => {
+                            const newMessages = [...prev];
+                            const { content, thinking, isThinkingComplete } = parseThinkingTags(accumulatedContent);
+                            newMessages[placeholderIndex] = {
+                                role: 'assistant',
+                                content,
+                                thinking,
+                                isThinkingComplete,
+                                timestamp: new Date()
+                            };
+                            return newMessages;
+                        });
+                    }
+
+                    // Capture usage data from the final chunk
+                    if (parsed.usage) {
+                        lastUsage = parsed.usage;
+                    }
+                } catch {
+                    // Skip invalid JSON chunks
+                }
+            };
+
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
 
-                const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split('\n');
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = line.slice(6);
-                        if (data === '[DONE]') continue;
-
-                        try {
-                            const parsed = JSON.parse(data);
-                            const delta = parsed.choices?.[0]?.delta?.content;
-
-                            if (delta) {
-                                accumulatedContent += delta;
-
-                                // Update the message in real-time
-                                setMessages(prev => {
-                                    const newMessages = [...prev];
-                                    const { content, thinking, isThinkingComplete } = parseThinkingTags(accumulatedContent);
-                                    newMessages[placeholderIndex] = {
-                                        role: 'assistant',
-                                        content,
-                                        thinking,
-                                        isThinkingComplete,
-                                        timestamp: new Date()
-                                    };
-                                    return newMessages;
-                                });
-                            }
-
-                            // Capture usage data from the final chunk
-                            if (parsed.usage) {
-                                lastUsage = parsed.usage;
-                            }
-                        } catch (e) {
-                            // Skip invalid JSON chunks
-                        }
-                    }
-                }
+                sse.push(decoder.decode(value, { stream: true })).forEach(handlePayload);
             }
+
+            // Emit a final frame if the stream ended without a trailing newline
+            sse.flush().forEach(handlePayload);
 
             // Update metrics with final usage data
             if (lastUsage) {
@@ -415,9 +418,19 @@ export const ChatInterface = () => {
                 }));
             }
 
-            // Auto-save to current session if one exists
+            // Auto-save to current session if one exists.
+            // Build the assistant message from the accumulated stream rather than
+            // reading it back out of `messages`: that closure predates this send,
+            // so indexing it returned undefined and threw inside the filter.
             if (currentSessionId) {
-                const latestMessages = [userMessage, messages[placeholderIndex]].filter(m => m.content);
+                const { content: finalContent, thinking: finalThinking } = parseThinkingTags(accumulatedContent);
+                const assistantMessage: Message = {
+                    role: 'assistant',
+                    content: finalContent,
+                    thinking: finalThinking,
+                    timestamp: new Date()
+                };
+                const latestMessages = [userMessage, assistantMessage].filter(m => m.content);
                 if (latestMessages.length > 0) {
                     const messagesToSave = latestMessages.map(msg => ({
                         session_id: currentSessionId,

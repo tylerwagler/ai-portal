@@ -307,9 +307,10 @@ export const ModelManager = ({ session }: Props) => {
             });
             return;
         }
+        if (!jwt) return;
         setOpenLogs(prev => ({ ...prev, [key]: { content: '', loading: true } }));
         try {
-            const result = await getManagerModelLogs(host, modelId, 200);
+            const result = await getManagerModelLogs(host, modelId, jwt, 200);
             setOpenLogs(prev => prev[key] ? { ...prev, [key]: { content: result.logs || '(no logs)', loading: false } } : prev);
         } catch (err: any) {
             setOpenLogs(prev => prev[key] ? { ...prev, [key]: { content: `Error: ${err.message}`, loading: false } } : prev);
@@ -318,9 +319,10 @@ export const ModelManager = ({ session }: Props) => {
 
     const refreshSingleLog = async (host: HostKey, modelId: string) => {
         const key = logsKey(host, modelId);
+        if (!jwt) return;
         setOpenLogs(prev => prev[key] ? { ...prev, [key]: { ...prev[key], loading: true } } : prev);
         try {
-            const result = await getManagerModelLogs(host, modelId, 200);
+            const result = await getManagerModelLogs(host, modelId, jwt, 200);
             setOpenLogs(prev => prev[key] ? { ...prev, [key]: { content: result.logs || '(no logs)', loading: false } } : prev);
         } catch (err: any) {
             setOpenLogs(prev => prev[key] ? { ...prev, [key]: { content: `Error: ${err.message}`, loading: false } } : prev);
@@ -330,18 +332,21 @@ export const ModelManager = ({ session }: Props) => {
     // Auto-refresh all open log panels
     useEffect(() => {
         const keys = Object.keys(openLogs);
-        if (keys.length === 0 || !logsAutoRefresh) return;
+        if (keys.length === 0 || !logsAutoRefresh || !jwt) return;
         const interval = setInterval(async () => {
             for (const key of keys) {
-                const [host, modelId] = key.split(':') as [HostKey, string];
+                // Split on the first separator only: model ids may contain colons.
+                const sep = key.indexOf(':');
+                const host = key.slice(0, sep) as HostKey;
+                const modelId = key.slice(sep + 1);
                 try {
-                    const result = await getManagerModelLogs(host, modelId, 200);
+                    const result = await getManagerModelLogs(host, modelId, jwt, 200);
                     setOpenLogs(prev => prev[key] ? { ...prev, [key]: { ...prev[key], content: result.logs || '(no logs)' } } : prev);
                 } catch { /* ignore */ }
             }
         }, 3000);
         return () => clearInterval(interval);
-    }, [Object.keys(openLogs).join(','), logsAutoRefresh]);
+    }, [Object.keys(openLogs).join(','), logsAutoRefresh, jwt]);
 
     // Sparky GPU budget (percentage-based fallback when no VRAM metrics)
     const sparkyGpuUsed = sparkyCatalog

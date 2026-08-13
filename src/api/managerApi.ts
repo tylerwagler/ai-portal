@@ -121,8 +121,12 @@ export async function unloadManagerModel(host: HostKey, modelId: string, jwt: st
   }
 }
 
-export async function getManagerModelLogs(host: HostKey, modelId: string, tail: number = 200): Promise<ManagerModelLogs> {
-  const response = await fetch(`/api/${host}/${modelId}/logs?tail=${tail}`);
+export async function getManagerModelLogs(host: HostKey, modelId: string, jwt: string, tail: number = 200): Promise<ManagerModelLogs> {
+  // Container logs can expose model paths and backend errors, so this is
+  // authenticated like every other manager endpoint.
+  const response = await fetch(`/api/${host}/${encodeURIComponent(modelId)}/logs?tail=${tail}`, {
+    headers: { 'Authorization': `Bearer ${jwt}` },
+  });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error || 'Failed to fetch model logs');

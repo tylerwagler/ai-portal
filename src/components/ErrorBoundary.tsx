@@ -33,10 +33,15 @@ export class ErrorBoundary extends Component<Props, State> {
                         <p className="text-dark-300 mb-6">
                             The application encountered an error while rendering. This is likely due to malformed data from the telemetry API.
                         </p>
+                        {/*
+                          * Raw error text is shown in development only. In production it can
+                          * leak internal paths, endpoint names and schema details, so users
+                          * get a generic message and the detail goes to the console instead.
+                          */}
                         <div className="bg-dark-900 p-4 rounded border border-dark-700 font-mono text-sm text-red-400 mb-6 overflow-auto max-h-48">
-                            {this.state.error?.message || 'An unexpected error occurred. Please refresh the page.'}
-                            {process.env.NODE_ENV === 'development' && (
+                            {import.meta.env.DEV ? (
                                 <>
+                                    {this.state.error?.message || 'An unexpected error occurred. Please refresh the page.'}
                                     <br /><br />
                                     <details className="text-dark-400 cursor-pointer">
                                         <summary>Stack trace</summary>
@@ -45,6 +50,8 @@ export class ErrorBoundary extends Component<Props, State> {
                                         </pre>
                                     </details>
                                 </>
+                            ) : (
+                                'An unexpected error occurred. Please refresh the page.'
                             )}
                         </div>
                         <button

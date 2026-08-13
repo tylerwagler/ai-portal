@@ -7,7 +7,7 @@
 ## Commands
 
 ```bash
-npm install          # install dependencies (Node >= 22)
+npm install          # install dependencies (Node >= 24, the active LTS)
 npm run dev          # Vite dev server (port 3000)
 npm run build        # tsc && vite build → dist/, then the postbuild guard
 npm run typecheck    # tsc --noEmit
@@ -39,7 +39,7 @@ Tests run under jsdom with `global.fetch` and `localStorage` mocked — see `src
 
 ## Deployment / proxy
 
-- `Dockerfile` builds with `node:22-alpine` (Supabase declares `engines.node >= 22`) using `npm ci`, and serves `dist/` on `nginx:alpine` with `nginx.conf`. `.dockerignore` keeps `node_modules` and any local `.env` out of the build context.
+- `Dockerfile` builds with `node:24-alpine` using `npm ci`, and serves `dist/` on `nginx:alpine` with `nginx.conf`. Node 24 is the active LTS; Node 26 is Current and does not reach LTS until October 2026, so it is intentionally not used here. (Supabase's floor is `>=22`.) `.dockerignore` keeps `node_modules` and any local `.env` out of the build context.
 - `nginx.conf` proxies: Supabase auth/rest (`ai-supabase-kong:8000`), host-metrics (`host-metrics:3001`), Sparky metrics (`10.20.10.10:3001`), ai-proxy (`ai-proxy:8081` for `/api/*` and `/llama/*`), Stripe billing (`stripe-handler:8000`). Applies security headers + CSP.
 - PWA: `public/manifest.json`, `public/sw.js` (network-only strategy; `fetch` handler intentionally does nothing so streaming responses aren't broken), icons in `public/`.
 - **Infrastructure direction:** the stack runs on Proxmox hypervisors `pve1`/`pve2`, where Ellie is a VM. The operator is moving away from Docker/compose toward LXCs; the compose-style service names above will need revisiting when that lands. Nothing in this repo has been migrated yet.
@@ -49,7 +49,7 @@ Tests run under jsdom with `global.fetch` and `localStorage` mocked — see `src
 - **Never upgrade Vite past 7.x without checking the bundle.** Vite 8 + `@vitejs/plugin-react` 6 exits 0, passes all tests, and emits a bundle containing **only vendor code** — every application module is dropped (601 kB → 202 kB). The test suite does not catch this because vitest transforms modules itself and never loads the built output. `scripts/verify-build.mjs` runs as a `postbuild` step and asserts known app-only strings are present plus a size floor. If you change app strings it references, update the marker list.
 - **Tailwind is v4 with CSS-first config.** There is no `tailwind.config.js` — it was removed because v4 ignores a JS config unless pulled in with `@config`, and its keyframes were being silently dropped (`animate-shimmer` compiled to nothing). Theme colours, keyframes and animations all live in the `@theme` block in `src/App.css`.
 - **TypeScript 7 removed `baseUrl`.** The `@/*` path mapping in `tsconfig.json` must stay explicitly relative (`./src/*`).
-- **jsdom is held at 29.x on purpose.** jsdom 30 requires Node `^22.22.2`; 29 supports Node `^20.19` and up, which keeps the suite runnable on both. Bump it only alongside a confirmed Node floor.
+- **jsdom is held at 29.x on purpose.** jsdom 30 requires Node `^22.22.2 || ^24.15.0 || >=26`, which the Node 24 floor does satisfy — but 29 runs on Node 20 through 26, so it stays verifiable on older machines too. Bumping to 30 is safe once every dev box is on Node >= 24.15; it was not done here because it could not be exercised in the environment these changes were validated in.
 - **`fetchGPUStats` host resolution order:** `temper_remote_hosts` localStorage (JSON array) → legacy `temper_remote_host` → `VITE_GPU_API_BASE` env → defaults `['/api', '/api/sparky']`. `'NO_HOSTS_CONFIGURED'` is thrown **only when the list is explicitly empty** (the user removed every host), which tells the UI to show the "Add Host" prompt. An absent key falls through to the defaults instead. `SettingsPage.tsx` manages host lists in localStorage.
 - **`fetchGPUMetrics` validates before fetching.** ID format and negative-index checks run ahead of the network call. The format regex accepts an optional leading `-` so a negative index reports its own specific error rather than the generic format one.
 - **Host naming:** `'ellie'` = local host (`/api`, contains `localhost`/`127.0.0.1`); `'sparky'` = everything else. `managerApi.ts` uses `HostKey = 'ellie' | 'sparky'`.

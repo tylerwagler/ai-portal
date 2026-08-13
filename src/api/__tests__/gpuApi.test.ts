@@ -138,7 +138,10 @@ describe('gpuApi', () => {
     });
 
     it('should throw error when no hosts configured', async () => {
-      localStorageMock.clear();
+      // An explicitly empty host list means the user removed every host, which
+      // must signal the UI to show the "Add Host" prompt. Note this is distinct
+      // from an absent key, which falls back to the built-in defaults below.
+      localStorageMock.setItem('temper_remote_hosts', JSON.stringify([]));
 
       await expect(fetchGPUStats()).rejects.toThrow('NO_HOSTS_CONFIGURED');
     });

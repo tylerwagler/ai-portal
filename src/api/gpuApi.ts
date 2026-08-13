@@ -148,10 +148,10 @@ export async function fetchGPUStats(): Promise<GPUStats> {
  * Fetch individual GPU metrics (mapped from Temper's /metrics response)
  */
 export async function fetchGPUMetrics(gpuId: string): Promise<TemperGPUMetric[]> {
-  const stats = await fetchGPUStats();
-
-  // Validate GPU ID input
-  if (!gpuId || !/^\d+$/.test(gpuId)) {
+  // Validate the GPU ID before doing any network work. The optional leading
+  // minus is accepted here so that a negative index reports the specific
+  // "cannot be negative" error rather than the generic format error.
+  if (!gpuId || !/^-?\d+$/.test(gpuId)) {
     throw new Error('Invalid GPU ID: must be a non-empty numeric string');
   }
 
@@ -159,6 +159,8 @@ export async function fetchGPUMetrics(gpuId: string): Promise<TemperGPUMetric[]>
   if (index < 0) {
     throw new Error('GPU index cannot be negative');
   }
+
+  const stats = await fetchGPUStats();
 
   if (index >= stats.gpus.length) {
     throw new Error(`GPU index ${index} out of range (available: 0-${stats.gpus.length - 1})`);

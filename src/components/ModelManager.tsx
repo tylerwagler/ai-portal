@@ -639,7 +639,9 @@ function HostColumn({
                                                 </span>
                                             )}
                                             {model.update_available === false && (
-                                                <CheckCircle2 size={12} className="text-green-500/50 flex-shrink-0" title="Up to date" />
+                                                <span title="Up to date" className="flex-shrink-0 flex">
+                                                    <CheckCircle2 size={12} className="text-green-500/50" aria-label="Up to date" />
+                                                </span>
                                             )}
                                         </div>
                                         <div className="flex items-center gap-3 text-[11px] text-dark-500 flex-wrap">

@@ -19,11 +19,11 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
 
   return (
     <div className={`space-y-2 ${className}`}>
-      {label && (
+      {(label || !isIndeterminate) && (
         <div className="flex items-center justify-between text-xs">
-          <span className="text-dark-400 font-medium">{label}</span>
+          {label && <span className="text-dark-400 font-medium">{label}</span>}
           {!isIndeterminate && (
-            <span className="text-accent-cyan font-bold font-mono">{percentage}%</span>
+            <span className="text-accent-cyan font-bold font-mono ml-auto">{percentage}%</span>
           )}
         </div>
       )}

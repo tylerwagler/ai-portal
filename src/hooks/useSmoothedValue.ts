@@ -26,11 +26,20 @@ export function useSmoothedValue(value: number, duration: number = 300): number 
         targetValueRef.current = value;
         startTimeRef.current = null;
 
+        // A non-positive duration means "no animation" — jump straight to the
+        // target. Animating would divide by zero and produce NaN.
+        if (duration <= 0) {
+            setCurrentValue(value);
+            return;
+        }
+
         const animate = (timestamp: number) => {
             // Check if component is still mounted before continuing
             if (!mountedRef.current) return;
 
-            if (!startTimeRef.current) startTimeRef.current = timestamp;
+            // Compare against null, not falsiness: a timestamp of 0 is valid and
+            // would otherwise reset the clock on every frame, stalling forever.
+            if (startTimeRef.current === null) startTimeRef.current = timestamp;
 
             const elapsed = timestamp - startTimeRef.current;
             const progress = Math.min(elapsed / duration, 1);

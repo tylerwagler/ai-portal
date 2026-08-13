@@ -6,7 +6,7 @@ The portal doubles as a PWA ("TemperView") with live GPU/host metrics, and ships
 
 - **Version:** 0.1.0-alpha
 - **Requires:** Node.js **26+**
-- **Tech:** React 19 · TypeScript 7 · Vite 7 · Tailwind CSS 4 · Vitest 4 · React Query (TanStack) · Supabase · Recharts · Nginx proxy
+- **Tech:** React 19 · TypeScript 7 · Vite 8 (Rolldown) · Tailwind CSS 4 · Vitest 4 · React Query (TanStack) · Supabase · Recharts · Nginx proxy
 
 ---
 
@@ -73,9 +73,11 @@ See `.env.example` for the available environment variables.
 
 ### About the build guard
 
-`npm run build` runs `scripts/verify-build.mjs` as a `postbuild` step. It checks that the emitted bundle still contains the application's own code and meets a size floor.
+`npm run build` runs `scripts/verify-build.mjs` as a `postbuild` step. It checks that the emitted bundle is actually runnable.
 
-This is not ceremony. Upgrading to Vite 8 produced a build that **exited 0, passed every test, and shipped a bundle with all application modules stripped out** — only vendor code remained. The test suite cannot catch this, because Vitest transforms modules itself and never loads the built output. Keep Vite on 7.x, and keep the guard.
+This is not ceremony. If you build without `VITE_SUPABASE_ANON_KEY`, `src/lib/supabase.ts` throws at module scope — and because the key is inlined at build time, that check folds to a constant and the whole bundle becomes a module that throws on load. **`vite build` still exits 0 and all 40 tests still pass**, because Vitest transforms modules itself and never loads the built output. Nothing else in the pipeline notices that the artifact cannot start.
+
+Worth knowing: this looks completely different depending on the bundler. Rolldown (Vite 8) proves the remaining code unreachable and strips it, leaving a ~200 kB stub — which is alarming but honest. Rollup (Vite 7) keeps the dead code, so you get a normal-looking ~600 kB bundle that is equally broken. Don't judge a build by its size; run the guard.
 
 ## Deployment
 

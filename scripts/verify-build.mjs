@@ -2,11 +2,19 @@
 /**
  * Smoke-check the production bundle.
  *
- * A toolchain upgrade once produced a build that exited 0, passed the whole test
- * suite, and shipped a bundle containing only vendor code — every one of the
- * app's own modules had been dropped. Neither `vite build`'s exit code nor
- * vitest catches that, because vitest transforms modules itself and never loads
- * the built output. This asserts the app is actually present in dist/.
+ * The failure this exists to catch: building without VITE_SUPABASE_ANON_KEY.
+ * src/lib/supabase.ts throws at module scope when the key is missing, and
+ * because the key is inlined at build time the guard folds to a constant, so
+ * the bundle becomes a module that does nothing but throw on load. `vite build`
+ * still exits 0 and the whole test suite still passes, because vitest
+ * transforms modules itself and never loads the built output — so nothing else
+ * in the pipeline notices that the artifact cannot start.
+ *
+ * How visible that is depends on the bundler. Rolldown (Vite 8) proves the rest
+ * of the app unreachable and eliminates it, leaving a ~200 kB stub. Rollup
+ * (Vite 7) keeps the dead code, so the bundle looks a normal size and passes a
+ * naive size check while still being unrunnable. Hence: check for the throw
+ * directly, not just for size.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -44,6 +52,17 @@ if (jsFiles.length === 0) fail(`no JavaScript emitted into ${ASSETS}/`);
 const bundles = jsFiles.map((f) => join(ASSETS, f));
 const totalBytes = bundles.reduce((sum, f) => sum + statSync(f).size, 0);
 const combined = bundles.map((f) => readFileSync(f, 'utf8')).join('\n');
+
+// Checked first: it is the most common cause and gives the clearest message.
+// The bundle retains this string whenever the key was absent at build time.
+if (combined.includes('VITE_SUPABASE_ANON_KEY is not set')) {
+  fail(
+    `built without VITE_SUPABASE_ANON_KEY.\n` +
+      `  src/lib/supabase.ts throws at module scope, so this bundle throws on\n` +
+      `  load and the app never mounts — regardless of its size.\n` +
+      `  Set it in .env.local, or pass --build-arg VITE_SUPABASE_ANON_KEY=... to docker build.`
+  );
+}
 
 const missing = REQUIRED_MARKERS.filter((marker) => !combined.includes(marker));
 

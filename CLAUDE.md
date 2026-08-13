@@ -2,7 +2,7 @@
 
 ## What this project is
 
-**AI Portal** (package name `gpu-dashboard`, v0.1.0-alpha) — a React 19 + Vite 7 + TypeScript management portal for a local AI inference stack. Non-admin users get chat, API keys, billing, and account settings; admins additionally get a GPU telemetry dashboard ("TemperView"), user/tier management, and a model manager for two hosts: **Ellie** (llama.cpp, local) and **Sparky** (vLLM). The repo also ships a `claude-local` wrapper that runs Claude Code against the local stack, served from `public/install/`.
+**AI Portal** (package name `gpu-dashboard`, v0.1.0-alpha) — a React 19 + Vite 8 + TypeScript management portal for a local AI inference stack. Non-admin users get chat, API keys, billing, and account settings; admins additionally get a GPU telemetry dashboard ("TemperView"), user/tier management, and a model manager for two hosts: **Ellie** (llama.cpp, local) and **Sparky** (vLLM). The repo also ships a `claude-local` wrapper that runs Claude Code against the local stack, served from `public/install/`.
 
 ## Commands
 
@@ -46,7 +46,8 @@ Tests run under jsdom with `global.fetch` and `localStorage` mocked — see `src
 
 ## Gotchas
 
-- **Never upgrade Vite past 7.x without checking the bundle.** Vite 8 + `@vitejs/plugin-react` 6 exits 0, passes all tests, and emits a bundle containing **only vendor code** — every application module is dropped (601 kB → 202 kB). The test suite does not catch this because vitest transforms modules itself and never loads the built output. `scripts/verify-build.mjs` runs as a `postbuild` step and asserts known app-only strings are present plus a size floor. If you change app strings it references, update the marker list.
+- **A build without `VITE_SUPABASE_ANON_KEY` produces an artifact that cannot start.** `src/lib/supabase.ts` throws at module scope when the key is missing, and since the key is inlined at build time that guard folds to a constant — so the bundle is a module that throws on load and never mounts the app. `vite build` still exits 0 and every test still passes, because vitest transforms modules itself and never loads the built output. `scripts/verify-build.mjs` runs as a `postbuild` step and catches exactly this; if you change the app strings it looks for, update its marker list.
+- **How that failure looks depends on the bundler, which is worth knowing before blaming an upgrade.** Rolldown (Vite 8) proves the rest of the app unreachable and eliminates it, leaving a ~200 kB stub. Rollup (Vite 7) keeps the dead code, so the bundle is a normal ~600 kB and *looks* healthy while being equally unrunnable. Vite 8's output is the more honest of the two. Vite 8 + `@vitejs/plugin-react` 6 is verified working here: 578 kB, 40 tests passing on Node 26, container build and served bundle both checked.
 - **Tailwind is v4 with CSS-first config.** There is no `tailwind.config.js` — it was removed because v4 ignores a JS config unless pulled in with `@config`, and its keyframes were being silently dropped (`animate-shimmer` compiled to nothing). Theme colours, keyframes and animations all live in the `@theme` block in `src/App.css`.
 - **TypeScript 7 removed `baseUrl`.** The `@/*` path mapping in `tsconfig.json` must stay explicitly relative (`./src/*`).
 - **The test suite requires Node >= 26.** jsdom 30 declares `^22.22.2 || ^24.15.0 || >=26.0.0` and hard-fails on older runtimes with `webidl.util.markAsUncloneable is not a function` before any test executes. If `npm run test:run` dies with that message, the Node version is the cause, not the tests. Verified passing on Node 26.7.0.

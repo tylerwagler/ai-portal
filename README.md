@@ -5,7 +5,7 @@ A management portal for a local AI inference stack. Users sign in through Supaba
 The portal doubles as a PWA ("TemperView") with live GPU/host metrics, and ships a `claude-local` wrapper that runs Claude Code against the local stack instead of Anthropic's API.
 
 - **Version:** 0.1.0-alpha
-- **Requires:** Node.js **24+** (active LTS)
+- **Requires:** Node.js **26+**
 - **Tech:** React 19 · TypeScript 7 · Vite 7 · Tailwind CSS 4 · Vitest 4 · React Query (TanStack) · Supabase · Recharts · Nginx proxy
 
 ---
@@ -44,7 +44,7 @@ There is no router library — `Portal.tsx` switches sections from component sta
 
 ## Getting started
 
-**Prerequisites:** Node.js 24 or newer. `VITE_SUPABASE_ANON_KEY` must be set — in `.env.local` for development or as a Docker build arg for production. `VITE_GPU_API_BASE` is optional (used as a fallback telemetry host).
+**Prerequisites:** Node.js 26 or newer. `VITE_SUPABASE_ANON_KEY` must be set — in `.env.local` for development or as a Docker build arg for production. `VITE_GPU_API_BASE` is optional (used as a fallback telemetry host).
 
 ```bash
 # Development
@@ -77,7 +77,7 @@ This is not ceremony. Upgrading to Vite 8 produced a build that **exited 0, pass
 
 ## Deployment
 
-Two-stage Docker build (`Dockerfile`), `node:24-alpine` → `nginx:alpine`:
+Two-stage Docker build (`Dockerfile`), `node:26-alpine` → `nginx:alpine`:
 
 ```bash
 # Pass the Supabase anon key at build time
@@ -114,7 +114,7 @@ The wrapper stores config in `~/.config/claude-local/env`, sets `ANTHROPIC_BASE_
 ```
 .dockerignore           Keeps node_modules/.env out of the image build context
 .env.example            Environment variables (VITE_GPU_API_BASE, VITE_SUPABASE_ANON_KEY)
-Dockerfile              node:24-alpine build → nginx:alpine serve
+Dockerfile              node:26-alpine build → nginx:alpine serve
 nginx.conf              Proxy/security config for the deployed portal
 scripts/verify-build.mjs  Postbuild guard — asserts app code is present in dist/
 React19_Migration.md    React 19 upgrade guide (completed)

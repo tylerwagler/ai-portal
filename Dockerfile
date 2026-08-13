@@ -1,8 +1,8 @@
 # Build stage
-# Node 24 is the active LTS line. Node 26 is Current and does not enter LTS
-# until October 2026, so it is deliberately not used for a production image.
-# (@supabase/supabase-js requires >=22; 24 clears that comfortably.)
-FROM node:24-alpine AS build
+# Tracking the latest Node release line (26.x). Note this is the Current line —
+# it enters LTS in October 2026 — so re-pin the tag deliberately rather than
+# letting it drift. (@supabase/supabase-js requires >=22.)
+FROM node:26-alpine AS build
 
 WORKDIR /app
 

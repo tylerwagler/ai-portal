@@ -1,5 +1,6 @@
 # Build stage
-FROM node:20-alpine as build
+# Node 22: @supabase/supabase-js declares engines node >=22.
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
@@ -7,8 +8,9 @@ WORKDIR /app
 ARG VITE_SUPABASE_ANON_KEY
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 
-COPY package*.json ./
-RUN npm install
+# Install from the lockfile so image builds are reproducible.
+COPY package.json package-lock.json ./
+RUN npm ci
 
 COPY . .
 RUN npm run build

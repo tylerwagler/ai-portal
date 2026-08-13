@@ -1,0 +1,23 @@
+# Keep the build context small and prevent host artifacts or secrets from
+# being copied into the image by `COPY . .`.
+node_modules
+dist
+dist-ssr
+coverage
+.git
+.gitignore
+.claude
+
+# Secrets — the anon key is passed as a build arg, never baked in from a file.
+.env
+.env.*
+!.env.example
+
+# Docs and local scratch files that do not affect the build
+*.md
+!README.md
+api_response.json
+*.log
+.DS_Store
+.vscode
+.idea

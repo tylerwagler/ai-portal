@@ -46,6 +46,8 @@ There is no router library — `Portal.tsx` switches sections from component sta
 
 **Prerequisites:** Node.js 26 or newer. `VITE_SUPABASE_ANON_KEY` must be set — in `.env.local` for development or as a Docker build arg for production. `VITE_GPU_API_BASE` is optional (used as a fallback telemetry host).
 
+> The test suite requires Node 26+. jsdom 30 fails to initialise on older runtimes (`webidl.util.markAsUncloneable is not a function`) before any test runs.
+
 ```bash
 # Development
 npm install

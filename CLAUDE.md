@@ -20,7 +20,7 @@ npm run test:ui      # vitest UI inspector
 
 `npm run build` automatically runs `scripts/verify-build.mjs` afterwards. See "Never upgrade Vite past 7.x" below — that guard exists for a specific reason and should not be removed.
 
-Tests run under jsdom with `global.fetch` and `localStorage` mocked — see `src/api/__tests__/gpuApi.test.ts` for the pattern. Current state: **40 tests across 5 files, all passing**; `npm audit` reports **0 vulnerabilities**.
+Tests run under jsdom with `global.fetch` and `localStorage` mocked — see `src/api/__tests__/gpuApi.test.ts` for the pattern. Current state: **40 tests across 5 files, all passing** on Node 26.7.0; `npm audit` reports **0 vulnerabilities**. Every dependency is at its latest published version.
 
 ## Architecture & conventions
 
@@ -49,7 +49,7 @@ Tests run under jsdom with `global.fetch` and `localStorage` mocked — see `src
 - **Never upgrade Vite past 7.x without checking the bundle.** Vite 8 + `@vitejs/plugin-react` 6 exits 0, passes all tests, and emits a bundle containing **only vendor code** — every application module is dropped (601 kB → 202 kB). The test suite does not catch this because vitest transforms modules itself and never loads the built output. `scripts/verify-build.mjs` runs as a `postbuild` step and asserts known app-only strings are present plus a size floor. If you change app strings it references, update the marker list.
 - **Tailwind is v4 with CSS-first config.** There is no `tailwind.config.js` — it was removed because v4 ignores a JS config unless pulled in with `@config`, and its keyframes were being silently dropped (`animate-shimmer` compiled to nothing). Theme colours, keyframes and animations all live in the `@theme` block in `src/App.css`.
 - **TypeScript 7 removed `baseUrl`.** The `@/*` path mapping in `tsconfig.json` must stay explicitly relative (`./src/*`).
-- **jsdom is at 29.x and is now the one component behind latest.** jsdom 30 requires Node `^22.22.2 || ^24.15.0 || >=26.0.0`, which the Node 26 floor satisfies, so the bump is unblocked. It was not applied because the environment these changes were validated in runs Node 20, where jsdom 30 cannot start at all (`webidl.util.markAsUncloneable is not a function`) — so the suite could not be executed against it. Bump it and run `npm run test:run` on Node >= 26 to confirm.
+- **The test suite requires Node >= 26.** jsdom 30 declares `^22.22.2 || ^24.15.0 || >=26.0.0` and hard-fails on older runtimes with `webidl.util.markAsUncloneable is not a function` before any test executes. If `npm run test:run` dies with that message, the Node version is the cause, not the tests. Verified passing on Node 26.7.0.
 - **`fetchGPUStats` host resolution order:** `temper_remote_hosts` localStorage (JSON array) → legacy `temper_remote_host` → `VITE_GPU_API_BASE` env → defaults `['/api', '/api/sparky']`. `'NO_HOSTS_CONFIGURED'` is thrown **only when the list is explicitly empty** (the user removed every host), which tells the UI to show the "Add Host" prompt. An absent key falls through to the defaults instead. `SettingsPage.tsx` manages host lists in localStorage.
 - **`fetchGPUMetrics` validates before fetching.** ID format and negative-index checks run ahead of the network call. The format regex accepts an optional leading `-` so a negative index reports its own specific error rather than the generic format one.
 - **Host naming:** `'ellie'` = local host (`/api`, contains `localhost`/`127.0.0.1`); `'sparky'` = everything else. `managerApi.ts` uses `HostKey = 'ellie' | 'sparky'`.

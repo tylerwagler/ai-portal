@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/components/Layout.tsx","./src/lib/api.ts","./src/lib/config.ts","./src/lib/supabase.ts","./src/pages/Account.tsx","./src/pages/Admin.tsx","./src/pages/Cli.tsx","./src/pages/Consent.tsx","./src/pages/Login.tsx","./src/pages/Reset.tsx"],"version":"5.9.3"}

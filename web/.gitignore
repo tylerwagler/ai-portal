@@ -1,0 +1,4 @@
+node_modules/
+dist/
+.env.local
+e2e/*.png

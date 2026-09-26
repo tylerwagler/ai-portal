@@ -36,6 +36,10 @@ function Plan() {
         <span className="text-dark-400">{price}</span>
       </div>
       {me.plan.description && <p className="text-sm text-dark-400">{me.plan.description}</p>}
+      <p className="text-xs text-dark-500">
+        Prompt tokens served from the model's prefix cache count at a reduced rate, so repeated context
+        (like Claude Code's system prompt) uses far less of your plan.
+      </p>
       <div className="grid gap-4 sm:grid-cols-2">
         {rows.map(([key, limit]) => <UsageBar key={key} label={LIMIT_LABELS[key] ?? key} limit={limit} />)}
       </div>

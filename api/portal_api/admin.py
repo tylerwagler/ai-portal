@@ -35,7 +35,7 @@ async def list_users(q: str = "", limit: int = 100, _: User = Depends(admin_user
                      res: Resources = Depends(resources)):
     rows = await res.db.fetch(
         """select p.id::text, p.email, p.display_name, p.role, p.status, p.tier_id, p.created_at,
-                  coalesce(sum(r.input_tokens + r.output_tokens + r.cached_tokens), 0)::bigint as tokens_30d,
+                  coalesce(sum(r.billable_tokens), 0)::bigint as tokens_30d,
                   coalesce(sum(r.requests), 0)::bigint as requests_30d
            from public.profiles p
            left join public.usage_rollups r on r.user_id = p.id and r.hour >= now() - interval '30 days'

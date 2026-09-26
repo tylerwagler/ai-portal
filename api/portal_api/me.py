@@ -31,7 +31,10 @@ async def daily_usage(days: int = 30, user: User = Depends(current_user), res: R
                   sum(requests)::bigint as requests,
                   sum(input_tokens)::bigint as input_tokens,
                   sum(output_tokens)::bigint as output_tokens,
-                  sum(cached_tokens)::bigint as cached_tokens
+                  sum(cached_tokens)::bigint as cached_tokens,
+                  sum(cache_creation_tokens)::bigint as cache_creation_tokens,
+                  sum(reasoning_tokens)::bigint as reasoning_tokens,
+                  sum(billable_tokens)::bigint as billable_tokens
            from public.usage_rollups
            where user_id = $1::uuid and hour >= now() - make_interval(days => $2)
            group by 1, 2 order by 1, 2""", user.id, min(max(days, 1), 366))

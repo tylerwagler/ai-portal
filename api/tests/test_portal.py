@@ -127,10 +127,10 @@ def test_consumer_stores_events_once_and_rolls_them_up(client, unlimited_tier):
 
     assert client.portal.call(drain) == 2
     events = int(sql(f"select count(*) from public.usage_events where user_id = '{p.id}';"))
-    rollup = sql(f"select requests || ',' || input_tokens || ',' || output_tokens "
+    rollup = sql(f"select requests || ',' || input_tokens || ',' || output_tokens || ',' || billable_tokens "
                  f"from public.usage_rollups where user_id = '{p.id}';")
     assert events == 2
-    assert rollup == "2,22,10"
+    assert rollup == "2,22,10,32"  # no cached tokens, so billable = input + output
     daily = client.get("/portal/me/usage/daily", headers=p.headers).json()
     assert daily[0]["requests"] == 2 and daily[0]["model"] == "mock-model"
 

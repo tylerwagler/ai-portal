@@ -29,37 +29,44 @@ with batch as (
   select * from jsonb_to_recordset($1::jsonb) as e(
     stream_id text, ts bigint, user_id uuid, api_key_id uuid, via text, model text,
     input_tokens bigint, output_tokens bigint, cached_tokens bigint,
-    cache_creation_tokens bigint, reasoning_tokens bigint, latency_ms integer,
-    complete boolean, estimated boolean, chat_id text)
+    cache_creation_tokens bigint, reasoning_tokens bigint, billable_tokens bigint,
+    latency_ms integer, complete boolean, estimated boolean, chat_id text)
 ),
 inserted as (
   insert into public.usage_events (stream_id, ts, user_id, api_key_id, via, model,
     input_tokens, output_tokens, cached_tokens, cache_creation_tokens, reasoning_tokens,
-    latency_ms, complete, estimated, chat_id)
+    billable_tokens, latency_ms, complete, estimated, chat_id)
   select b.stream_id, to_timestamp(b.ts), b.user_id,
          -- A key deleted since the request still bills the user.
          (select k.id from public.api_keys k where k.id = b.api_key_id),
          b.via, b.model, b.input_tokens, b.output_tokens, b.cached_tokens,
-         b.cache_creation_tokens, b.reasoning_tokens, b.latency_ms, b.complete, b.estimated, b.chat_id
+         b.cache_creation_tokens, b.reasoning_tokens, b.billable_tokens,
+         b.latency_ms, b.complete, b.estimated, b.chat_id
   from batch b
   where exists (select 1 from public.profiles p where p.id = b.user_id)
   on conflict (stream_id) do nothing
-  returning ts, user_id, api_key_id, model, input_tokens, output_tokens, cached_tokens
+  returning ts, user_id, api_key_id, model, input_tokens, output_tokens, cached_tokens,
+            cache_creation_tokens, reasoning_tokens, billable_tokens
 )
-insert into public.usage_rollups (hour, user_id, api_key_id, model, requests, input_tokens, output_tokens, cached_tokens)
+insert into public.usage_rollups (hour, user_id, api_key_id, model, requests, input_tokens, output_tokens,
+                                  cached_tokens, cache_creation_tokens, reasoning_tokens, billable_tokens)
 select date_trunc('hour', ts), user_id, api_key_id, model, count(*),
-       sum(input_tokens), sum(output_tokens), sum(cached_tokens)
+       sum(input_tokens), sum(output_tokens), sum(cached_tokens),
+       sum(cache_creation_tokens), sum(reasoning_tokens), sum(billable_tokens)
 from inserted
 group by 1, 2, 3, 4
 on conflict (hour, user_id, api_key_id, model) do update set
   requests = usage_rollups.requests + excluded.requests,
   input_tokens = usage_rollups.input_tokens + excluded.input_tokens,
   output_tokens = usage_rollups.output_tokens + excluded.output_tokens,
-  cached_tokens = usage_rollups.cached_tokens + excluded.cached_tokens
+  cached_tokens = usage_rollups.cached_tokens + excluded.cached_tokens,
+  cache_creation_tokens = usage_rollups.cache_creation_tokens + excluded.cache_creation_tokens,
+  reasoning_tokens = usage_rollups.reasoning_tokens + excluded.reasoning_tokens,
+  billable_tokens = usage_rollups.billable_tokens + excluded.billable_tokens
 """
 
 NUMBER_FIELDS = ("ts", "input_tokens", "output_tokens", "cached_tokens",
-                 "cache_creation_tokens", "reasoning_tokens", "latency_ms")
+                 "cache_creation_tokens", "reasoning_tokens", "billable_tokens", "latency_ms")
 
 
 def to_row(stream_id: str, fields: dict) -> dict:

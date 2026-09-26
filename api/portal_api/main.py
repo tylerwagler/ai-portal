@@ -20,7 +20,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         s = settings or Settings.from_env()
         db = await asyncpg.create_pool(s.database_url, min_size=1, max_size=10)
-        valkey = redis.from_url(s.valkey_url, decode_responses=True)
+        # redis-py defaults to a 5 s socket timeout, which a blocking stream read would hit.
+        valkey = redis.from_url(s.valkey_url, decode_responses=True,
+                                socket_timeout=usage_consumer.BLOCK_MS / 1000 + 10)
         app.state.resources = Resources(settings=s, db=db, valkey=valkey,
                                         jwks=jwt.PyJWKClient(s.jwks_url, cache_keys=True, lifespan=3600))
         consumer = asyncio.create_task(usage_consumer.run(db, valkey)) if s.run_usage_consumer else None

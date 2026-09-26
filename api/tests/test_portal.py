@@ -135,6 +135,18 @@ def test_consumer_stores_events_once_and_rolls_them_up(client, unlimited_tier):
     assert daily[0]["requests"] == 2 and daily[0]["model"] == "mock-model"
 
 
+def test_idle_consumer_read_does_not_time_out(client):
+    """An empty stream makes the consumer wait the full BLOCK_MS; the client must allow it."""
+    res = client.app.state.resources
+
+    async def idle_read():
+        await res.valkey.xread({f"idle-{time.time()}": "$"}, block=usage_consumer.BLOCK_MS)
+
+    started = time.time()
+    client.portal.call(idle_read)
+    assert time.time() - started >= usage_consumer.BLOCK_MS / 1000 - 0.5
+
+
 # --- admin ------------------------------------------------------------------------
 
 def test_admin_endpoints_need_an_admin(client, unlimited_tier):

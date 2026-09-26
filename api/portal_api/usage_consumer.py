@@ -19,6 +19,8 @@ log = logging.getLogger("portal_api.usage")
 STREAM = "usage:events"
 GROUP = "portal"
 BATCH = 500
+# How long one read waits for new entries. The Valkey client's socket timeout must exceed it.
+BLOCK_MS = 5000
 # Entries another consumer read but never acknowledged are taken over after this long.
 CLAIM_IDLE_MS = 60_000
 
@@ -84,7 +86,7 @@ async def write_batch(db: asyncpg.Pool, entries: list[tuple[str, dict]]) -> None
         await conn.execute(INSERT_BATCH, json.dumps(rows))
 
 
-async def process_once(db: asyncpg.Pool, valkey: redis.Redis, consumer: str, block_ms: int = 5000) -> int:
+async def process_once(db: asyncpg.Pool, valkey: redis.Redis, consumer: str, block_ms: int = BLOCK_MS) -> int:
     """Reads, stores, and acknowledges one batch. Returns how many entries it handled."""
     _, claimed, _ = await valkey.xautoclaim(STREAM, GROUP, consumer, CLAIM_IDLE_MS, "0-0", count=BATCH)
     entries = list(claimed)

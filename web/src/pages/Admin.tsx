@@ -1,9 +1,10 @@
-import { Save } from 'lucide-react';
+import { Activity, ExternalLink, Save } from 'lucide-react';
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 
 import { ErrorNote, useMe } from '../components/Layout';
 import { api, useApi } from '../lib/api';
+import { DASHBOARD_URL } from '../lib/config';
 
 type AdminUser = {
   id: string;
@@ -44,9 +45,27 @@ export default function Admin() {
   if (me.user.role !== 'admin') return <Navigate to="/" replace />;
   return (
     <>
+      <Dashboard />
       <Users />
       <Tiers />
     </>
+  );
+}
+
+function Dashboard() {
+  return (
+    <section className="card flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3">
+        <Activity size={20} className="text-accent-green" />
+        <div>
+          <h2 className="text-lg font-semibold text-white">System dashboard</h2>
+          <p className="text-sm text-dark-500">Live model, gateway and service health (pulsar-gui).</p>
+        </div>
+      </div>
+      <a className="btn flex items-center gap-2" href={DASHBOARD_URL} target="_blank" rel="noreferrer">
+        Open <ExternalLink size={14} />
+      </a>
+    </section>
   );
 }
 

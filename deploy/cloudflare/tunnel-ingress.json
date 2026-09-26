@@ -35,6 +35,11 @@
       "service": "http://10.20.20.211:8200",
       "originRequest": { "httpHostHeader": "api.elytrondefense.com", "connectTimeout": 10 }
     },
+    {
+      "hostname": "ai.elytrondefense.com",
+      "service": "http://10.20.20.6:8080",
+      "originRequest": { "httpHostHeader": "ai.elytrondefense.com", "connectTimeout": 10 }
+    },
     { "service": "http_status:404" }
   ]
 }

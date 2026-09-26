@@ -1,0 +1,226 @@
+#!/bin/bash
+# claude-elytron — run Claude Code on the Elytron AI stack.
+#
+# Usage:
+#   claude-elytron [claude args...]   Start Claude Code (signs you in first if needed)
+#   claude-elytron --login            Sign in with your browser and save a new API key
+#   claude-elytron --set-key <key>    Use an existing API key
+#   claude-elytron --set-url <url>    Use a different API server
+#   claude-elytron --config           Show the saved configuration
+#   claude-elytron --env              Show the environment handed to Claude Code (also --elytron-env)
+#   claude-elytron --update           Update this script
+#   claude-elytron --reset-config     Delete the saved configuration
+#   claude-elytron --version | --help
+#
+# Config: ~/.config/claude-elytron/env (KEY=VALUE). Environment variables of the same
+# name override it for one run. Optional model settings:
+#   CLAUDE_ELYTRON_MODEL        main model          [deepseek-v4-flash]
+#   CLAUDE_ELYTRON_HAIKU_MODEL  background model    [gemma4-26b-a4b]
+#   CLAUDE_ELYTRON_CTX_TOKENS   context window      [1000000]
+# Earlier releases read harness.conf and talked to the switchyard directly; this one
+# signs in and goes through the API host. harness.conf is no longer read.
+
+set -u
+
+SCRIPT_VERSION="2.0.0"
+DEFAULT_URL="https://api.elytrondefense.com"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/claude-elytron"
+CONFIG_FILE="$CONFIG_DIR/env"
+CONFIG_KEYS="CLAUDE_ELYTRON_URL CLAUDE_ELYTRON_API_KEY CLAUDE_ELYTRON_MODEL CLAUDE_ELYTRON_HAIKU_MODEL CLAUDE_ELYTRON_CTX_TOKENS"
+
+say() { echo "claude-elytron: $*" >&2; }
+die() { say "$*"; exit 1; }
+
+# --- JSON (jq if present, else python3) ------------------------------------------
+json() {
+    if command -v jq >/dev/null 2>&1; then
+        jq -r "$1 // empty" 2>/dev/null
+    else
+        python3 -c "import sys,json
+d=json.load(sys.stdin)
+for k in sys.argv[1].lstrip('.').split('.'):
+    d=d.get(k) if isinstance(d,dict) else None
+print('' if d is None else d)" "$1" 2>/dev/null
+    fi
+}
+
+# --- configuration ------------------------------------------------------------------
+load_config() {
+    for k in $CONFIG_KEYS; do printf -v "$k" '%s' ""; done
+    [ -f "$CONFIG_FILE" ] || return 0
+    while IFS='=' read -r key value; do
+        case " $CONFIG_KEYS " in *" $key "*) printf -v "$key" '%s' "$value" ;; esac
+    done < "$CONFIG_FILE"
+}
+
+save_config() {
+    mkdir -p "$CONFIG_DIR"
+    ( umask 077
+      for k in $CONFIG_KEYS; do [ -n "${!k}" ] && echo "$k=${!k}"; done > "$CONFIG_FILE" )
+    chmod 600 "$CONFIG_FILE"
+}
+
+# Environment overrides are kept apart so they are never written back to the file.
+for k in $CONFIG_KEYS; do printf -v "OVERRIDE_$k" '%s' "${!k-}"; done
+setting() { local o="OVERRIDE_$1"; if [ -n "${!o}" ]; then echo "${!o}"; else echo "${!1}"; fi; }
+
+load_config
+# The old portal hosts are gone; everything now lives on the API host.
+case "$CLAUDE_ELYTRON_URL" in
+    ""|https://ellie.elytrondefense.com*|https://ai.elytrondefense.com*)
+        [ -n "$CLAUDE_ELYTRON_URL" ] && say "moving from $CLAUDE_ELYTRON_URL to $DEFAULT_URL"
+        CLAUDE_ELYTRON_URL="$DEFAULT_URL"
+        [ -f "$CONFIG_FILE" ] && save_config ;;
+esac
+URL="$(setting CLAUDE_ELYTRON_URL)"
+URL="${URL%/}"
+KEY="$(setting CLAUDE_ELYTRON_API_KEY)"
+
+# --- sign-in: the browser approves this device; the key comes back here --------------
+login() {
+    local device start code verify interval expires poll status deadline reply
+    device="claude-elytron ($(hostname 2>/dev/null || echo unknown))"
+    start=$(curl -fsS --max-time 15 -X POST "$URL/portal/cli/start" \
+        -H 'Content-Type: application/json' -d "{\"device_name\":\"$device\"}") \
+        || die "could not reach $URL to sign in"
+    code=$(echo "$start" | json .user_code)
+    verify=$(echo "$start" | json .verify_url)
+    poll=$(echo "$start" | json .device_code)
+    interval=$(echo "$start" | json .interval); interval=${interval:-3}
+    expires=$(echo "$start" | json .expires_in); expires=${expires:-600}
+    [ -n "$poll" ] || die "unexpected sign-in response from $URL"
+
+    echo "" >&2
+    echo "  To sign in, open:  $verify" >&2
+    echo "  and confirm code:  $code" >&2
+    echo "" >&2
+    # Open the page on a desktop session; over SSH the user opens it elsewhere.
+    if [ -z "${SSH_CONNECTION:-}" ]; then
+        if command -v xdg-open >/dev/null 2>&1; then
+            xdg-open "$verify" >/dev/null 2>&1 &
+        elif command -v open >/dev/null 2>&1; then
+            open "$verify" >/dev/null 2>&1 &
+        fi
+    fi
+
+    reply=$(mktemp)
+    deadline=$(( $(date +%s) + expires ))
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        sleep "$interval"
+        status=$(curl -sS --max-time 15 -o "$reply" -w '%{http_code}' -X POST \
+            "$URL/portal/cli/poll" -H 'Content-Type: application/json' -d "{\"device_code\":\"$poll\"}")
+        case "$status" in
+            200)
+                CLAUDE_ELYTRON_API_KEY=$(json .api_key < "$reply")
+                rm -f "$reply"
+                KEY="$CLAUDE_ELYTRON_API_KEY"
+                [ -n "$KEY" ] || die "sign-in returned no key"
+                save_config
+                say "signed in; key saved to $CONFIG_FILE"
+                return 0 ;;
+            202) ;;
+            410) rm -f "$reply"; die "sign-in code expired; run claude-elytron --login again" ;;
+            *)   ;;  # transient error: keep waiting
+        esac
+    done
+    rm -f "$reply"
+    die "timed out waiting for approval"
+}
+
+# --- key check: 200 good, 401/403 bad, anything else means we could not tell ---------
+key_status() {
+    curl -s --max-time 10 -o /dev/null -w '%{http_code}' \
+        -H "Authorization: Bearer $KEY" "$URL/v1/models"
+}
+
+update() {
+    local tmp target
+    target="$(readlink -f "${BASH_SOURCE[0]}")"
+    tmp=$(mktemp)
+    curl -fsSL --max-time 30 "$URL/install/claude-elytron" -o "$tmp" || { rm -f "$tmp"; die "download failed"; }
+    bash -n "$tmp" || { rm -f "$tmp"; die "downloaded script is broken; not installed"; }
+    chmod +x "$tmp" && mv "$tmp" "$target" || die "could not replace $target"
+    say "updated to $(bash "$target" --version)"
+}
+
+mask() { local k="$1"; [ ${#k} -gt 10 ] && echo "${k:0:6}…${k: -4}" || echo "(not set)"; }
+
+case "${1:-}" in
+    --login) login; exit 0 ;;
+    --set-key)
+        [ -n "${2:-}" ] || die "usage: claude-elytron --set-key <key>"
+        CLAUDE_ELYTRON_API_KEY="$2"; save_config; say "key saved"; exit 0 ;;
+    --env|--elytron-env) ;;  # handled after the environment is built
+    --set-url)
+        [ -n "${2:-}" ] || die "usage: claude-elytron --set-url <url>"
+        CLAUDE_ELYTRON_URL="${2%/}"; save_config; say "server set to $CLAUDE_ELYTRON_URL"; exit 0 ;;
+    --config)
+        echo "config file: $CONFIG_FILE"
+        echo "server:      $URL"
+        echo "api key:     $(mask "$KEY")"
+        exit 0 ;;
+    --update) update; exit 0 ;;
+    --reset-config) rm -f "$CONFIG_FILE"; say "configuration deleted"; exit 0 ;;
+    --version) echo "claude-elytron $SCRIPT_VERSION"; exit 0 ;;
+    --help|-h) sed -n '2,/^[^#]/{/^#/s/^# \{0,1\}//p}' "${BASH_SOURCE[0]}"; exit 0 ;;
+esac
+
+# --- normal start ---------------------------------------------------------------------
+if [ -z "$KEY" ]; then
+    [ -t 0 ] || die "not signed in; run claude-elytron --login"
+    say "not signed in yet"
+    login
+fi
+
+status=$(key_status)
+case "$status" in
+    200) ;;
+    401|403)
+        [ -t 0 ] || die "API key rejected ($status); run claude-elytron --login"
+        say "your API key was rejected ($status); signing in again"
+        login ;;
+    *) say "warning: could not check your key at $URL ($status); starting anyway" ;;
+esac
+
+# Update notice, without delaying start.
+( remote=$(curl -fsS --max-time 3 "$URL/install/version" 2>/dev/null | tr -d '[:space:]')
+  [ -n "$remote" ] && [ "$remote" != "$SCRIPT_VERSION" ] \
+      && say "update available: $SCRIPT_VERSION -> $remote (run: claude-elytron --update)" ) &
+
+MODEL="$(setting CLAUDE_ELYTRON_MODEL)"; MODEL="${MODEL:-deepseek-v4-flash}"
+SMALL_MODEL="$(setting CLAUDE_ELYTRON_HAIKU_MODEL)"; SMALL_MODEL="${SMALL_MODEL:-gemma4-26b-a4b}"
+CTX_TOKENS="$(setting CLAUDE_ELYTRON_CTX_TOKENS)"; CTX_TOKENS="${CTX_TOKENS:-1000000}"
+
+unset ANTHROPIC_API_KEY
+export ANTHROPIC_BASE_URL="$URL"
+# Sent as "Authorization: Bearer"; avoids Claude Code's API-key confirmation prompt.
+export ANTHROPIC_AUTH_TOKEN="$KEY"
+# The model sessions start on; unlike ANTHROPIC_MODEL, a /model choice still sticks.
+export ANTHROPIC_DEFAULT_MODEL="$MODEL"
+# Fill the /model picker from the gateway's /v1/models.
+export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1
+# Claude Code's background calls use the haiku and sonnet aliases; send them to the
+# small model. Opus, fable and subagents stay on the main model.
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="$SMALL_MODEL"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="$SMALL_MODEL"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="$MODEL"
+export ANTHROPIC_DEFAULT_FABLE_MODEL="$MODEL"
+export CLAUDE_CODE_SUBAGENT_MODEL="$MODEL"
+# The context window for model ids Claude Code does not know.
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS="$CTX_TOKENS"
+# The token-budget reminder changes on every session, which defeats the server's
+# prefix cache across sessions. Everything else stays at Claude Code's defaults.
+export CLAUDE_CODE_TOTAL_TOKENS_REMINDER=off
+
+if [ "${1:-}" = "--env" ] || [ "${1:-}" = "--elytron-env" ]; then
+    for v in ANTHROPIC_BASE_URL ANTHROPIC_DEFAULT_MODEL ANTHROPIC_DEFAULT_{HAIKU,SONNET,OPUS,FABLE}_MODEL \
+             CLAUDE_CODE_SUBAGENT_MODEL CLAUDE_CODE_MAX_CONTEXT_TOKENS CLAUDE_CODE_TOTAL_TOKENS_REMINDER \
+             CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY; do
+        echo "$v=${!v}"
+    done
+    echo "ANTHROPIC_AUTH_TOKEN=$(mask "$ANTHROPIC_AUTH_TOKEN")"
+    exit 0
+fi
+
+command -v claude >/dev/null 2>&1 || die "'claude' is not on PATH; install Claude Code: curl -fsSL https://claude.ai/install.sh | bash"
+exec claude "$@"

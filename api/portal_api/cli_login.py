@@ -1,4 +1,4 @@
-"""Device login for claude-local: the CLI shows a code, the user approves it in the portal,
+"""Device login for claude-elytron: the CLI shows a code, the user approves it in the portal,
 and the CLI receives a new API key. The CLI never handles the user's password.
 
     CLI:     POST /portal/cli/start           -> device_code, user_code, verify_url
@@ -35,7 +35,7 @@ def normalize(code: str) -> str:
 
 
 class Start(BaseModel):
-    device_name: str = Field(default="claude-local", max_length=80)
+    device_name: str = Field(default="claude-elytron", max_length=80)
 
 
 class Approve(BaseModel):

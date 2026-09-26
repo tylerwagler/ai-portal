@@ -7,7 +7,7 @@ import { api } from '../lib/api';
 
 type Pending = { user_code: string; device_name: string; status: string };
 
-/** Approves a `claude-local --login` request; the CLI then receives its own API key. */
+/** Approves a `claude-elytron --login` request; the CLI then receives its own API key. */
 export default function Cli() {
   const [params] = useSearchParams();
   const [code, setCode] = useState(params.get('code') ?? '');

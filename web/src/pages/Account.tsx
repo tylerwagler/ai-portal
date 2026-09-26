@@ -78,12 +78,12 @@ function ClaudeCode() {
   return (
     <section className="card space-y-3">
       <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><Terminal size={18} /> Claude Code</h2>
-      <p className="text-sm text-dark-400">Install <code>claude-local</code>, then sign in. Your browser approves the device; no key to copy.</p>
+      <p className="text-sm text-dark-400">Install <code>claude-elytron</code>, then sign in. Your browser approves the device; no key to copy.</p>
       <p className="text-sm">Linux and macOS</p>
       <CopyLine text={`curl -fsSL ${API_URL}/install/setup.sh | bash`} />
       <p className="text-sm">Windows (PowerShell)</p>
       <CopyLine text={`irm ${API_URL}/install/setup.ps1 | iex`} />
-      <CopyLine text="claude-local --login" />
+      <CopyLine text="claude-elytron --login" />
     </section>
   );
 }

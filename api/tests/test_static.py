@@ -14,7 +14,8 @@ def test_web_app_routes_fall_back_to_index(client):
 
 
 def test_api_paths_and_api_host_do_not_get_the_web_app(client):
-    assert client.get("/portal/nope").status_code == 404
+    for path in ("/portal/nope", "/rest/v1/", "/storage/v1/object", "/v1/models"):
+        assert client.get(path).status_code == 404, path
     assert client.get("/", headers={"host": API_HOST}).status_code == 404
     assert client.get("/portal/health", headers={"host": API_HOST}).status_code == 200
 

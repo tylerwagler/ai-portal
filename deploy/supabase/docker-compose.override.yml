@@ -16,6 +16,12 @@ services:
       GOTRUE_OAUTH_SERVER_ENABLED: "true"
       GOTRUE_OAUTH_SERVER_AUTHORIZATION_PATH: /oauth/consent
       GOTRUE_OAUTH_SERVER_ALLOW_DYNAMIC_REGISTRATION: "false"
+      # Password rules, enforced by Auth for sign-up, reset and change (the portal shows them too).
+      GOTRUE_PASSWORD_MIN_LENGTH: "12"
+      GOTRUE_PASSWORD_REQUIRED_CHARACTERS: "abcdefghijklmnopqrstuvwxyz:ABCDEFGHIJKLMNOPQRSTUVWXYZ:0123456789"
+      # Reject passwords from known breaches (Have I Been Pwned, k-anonymity); fail open if unreachable.
+      GOTRUE_PASSWORD_HIBP_ENABLED: "true"
+      GOTRUE_PASSWORD_HIBP_BLOOM_ENABLED: "true"
   rest:
     image: postgrest/postgrest:v14.18
   realtime:

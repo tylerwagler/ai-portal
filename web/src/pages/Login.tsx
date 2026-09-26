@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 
 import { Centered, ErrorNote } from '../components/Layout';
+import { NewPassword, passwordOk } from '../components/NewPassword';
 import { supabase, useSession } from '../lib/supabase';
 
 type Mode = 'signin' | 'signup' | 'reset';
@@ -18,6 +19,7 @@ export default function Login() {
   const [mode, setMode] = useState<Mode>(params.get('mode') === 'signup' ? 'signup' : 'signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -65,17 +67,21 @@ export default function Login() {
           <input id="email" className="input" type="email" autoComplete="username" required
                  value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
-        {mode !== 'reset' && (
+        {mode === 'signin' && (
           <div>
             <label className="label" htmlFor="password">Password</label>
-            <input id="password" className="input" type="password" minLength={8} required
-                   autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+            <input id="password" className="input" type="password" required autoComplete="current-password"
                    value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
         )}
+        {mode === 'signup' && (
+          <NewPassword password={password} confirm={confirm} onPassword={setPassword} onConfirm={setConfirm} />
+        )}
         <ErrorNote>{error}</ErrorNote>
         {notice && <p className="text-sm text-accent-green">{notice}</p>}
-        <button className="btn w-full" disabled={busy}>{titles[mode]}</button>
+        <button className="btn w-full" disabled={busy || (mode === 'signup' && !passwordOk(password, confirm))}>
+          {titles[mode]}
+        </button>
         <div className="flex justify-between text-sm text-dark-400">
           {mode === 'signin' ? (
             <>

@@ -18,7 +18,6 @@ $ScriptVersion = "2.0.0"
 $DefaultUrl = "https://api.elytrondefense.com"
 $ConfigDir = Join-Path $env:USERPROFILE ".config\claude-elytron"
 $ConfigFile = Join-Path $ConfigDir "config.json"
-$OldConfigFile = Join-Path $ConfigDir "config.ps1"
 
 function Say($msg) { [Console]::Error.WriteLine("claude-elytron: $msg") }
 function Die($msg) { Say $msg; exit 1 }
@@ -28,10 +27,6 @@ function Load-Config {
     if (Test-Path $ConfigFile) {
         $saved = Get-Content $ConfigFile -Raw | ConvertFrom-Json
         foreach ($p in $saved.PSObject.Properties) { $c[$p.Name] = [string]$p.Value }
-    } elseif (Test-Path $OldConfigFile) {
-        # Older releases kept a PowerShell file; read its values without running it.
-        $old = Get-Content $OldConfigFile -Raw
-        if ($old -match 'CLAUDE_ELYTRON_URL\s*=\s*"([^"]+)"') { $c.url = $Matches[1] }
     }
     return $c
 }
@@ -41,18 +36,12 @@ function Save-Config($c) {
     ($c | ConvertTo-Json) | Set-Content -Path $ConfigFile -Encoding UTF8
     # Readable by the current user only.
     icacls $ConfigFile /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null
-    if (Test-Path $OldConfigFile) { Remove-Item $OldConfigFile -Force }
 }
 
 function Mask($k) { if ($k.Length -gt 10) { "$($k.Substring(0,6))…$($k.Substring($k.Length-4))" } else { "(not set)" } }
 
 $Config = Load-Config
-# Earlier releases pointed at the old portal hosts; everything now lives on the API host.
-if (-not $Config.url -or $Config.url -match '^https://(ellie|ai)\.elytrondefense\.com') {
-    if ($Config.url) { Say "moving from $($Config.url) to $DefaultUrl" }
-    $Config.url = $DefaultUrl
-    if ((Test-Path $ConfigFile) -or (Test-Path $OldConfigFile)) { Save-Config $Config }
-}
+if (-not $Config.url) { $Config.url = $DefaultUrl }
 $Url = $Config.url.TrimEnd("/")
 
 function Invoke-Login {
@@ -129,7 +118,7 @@ switch ($args[0]) {
         Say "updated"
         exit 0
     }
-    "--reset-config" { Remove-Item $ConfigFile, $OldConfigFile -ErrorAction SilentlyContinue; Say "configuration deleted"; exit 0 }
+    "--reset-config" { Remove-Item $ConfigFile -ErrorAction SilentlyContinue; Say "configuration deleted"; exit 0 }
     "--version" { Write-Host "claude-elytron $ScriptVersion"; exit 0 }
     { $_ -in "--help", "-h" } {
         Get-Content $PSCommandPath | Select-Object -Skip 1 -First 14 | ForEach-Object { $_ -replace '^# ?', '' }

@@ -65,14 +65,8 @@ for k in $CONFIG_KEYS; do printf -v "OVERRIDE_$k" '%s' "${!k-}"; done
 setting() { local o="OVERRIDE_$1"; if [ -n "${!o}" ]; then echo "${!o}"; else echo "${!1}"; fi; }
 
 load_config
-# The old portal hosts are gone; everything now lives on the API host.
-case "$CLAUDE_ELYTRON_URL" in
-    ""|https://ellie.elytrondefense.com*|https://ai.elytrondefense.com*)
-        [ -n "$CLAUDE_ELYTRON_URL" ] && say "moving from $CLAUDE_ELYTRON_URL to $DEFAULT_URL"
-        CLAUDE_ELYTRON_URL="$DEFAULT_URL"
-        [ -f "$CONFIG_FILE" ] && save_config ;;
-esac
 URL="$(setting CLAUDE_ELYTRON_URL)"
+URL="${URL:-$DEFAULT_URL}"
 URL="${URL%/}"
 KEY="$(setting CLAUDE_ELYTRON_API_KEY)"
 

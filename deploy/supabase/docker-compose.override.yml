@@ -1,0 +1,30 @@
+# Supabase host (CT 125 ai-supabase): overrides on top of the official self-hosted/v0.8.2 compose.
+# Install as /opt/supabase/docker-compose.override.yml with COMPOSE_FILE=docker-compose.yml:docker-compose.override.yml
+# Images: newest stable tag within each image's current major version (2026-09-26).
+# Held back on purpose: postgrest v16 and imgproxy v4 (major versions Supabase's compose has not adopted).
+services:
+  studio:
+    image: supabase/studio:2026.09.21-sha-512201d
+  auth:
+    image: supabase/gotrue:v2.197.0
+    # For the portal edge on the LAN: the OIDC endpoints and JWKS must be reachable
+    # without Supabase's gateway, which demands an apikey. Not routed publicly.
+    ports:
+      - "9999:9999"
+    environment:
+      # Supabase Auth as the OIDC provider for Open WebUI. Consent page lives on the portal.
+      GOTRUE_OAUTH_SERVER_ENABLED: "true"
+      GOTRUE_OAUTH_SERVER_AUTHORIZATION_PATH: /oauth/consent
+      GOTRUE_OAUTH_SERVER_ALLOW_DYNAMIC_REGISTRATION: "false"
+  rest:
+    image: postgrest/postgrest:v14.18
+  realtime:
+    image: supabase/realtime:v2.138.1
+  storage:
+    image: supabase/storage-api:v1.79.20
+  functions:
+    image: supabase/edge-runtime:v1.77.1
+  db:
+    image: supabase/postgres:17.6.1.177
+  supavisor:
+    image: supabase/supavisor:2.9.13

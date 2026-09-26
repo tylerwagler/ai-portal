@@ -1,0 +1,40 @@
+# AI portal services, next to the Supabase compose project on the same host.
+# Secrets and host-specific values come from deploy/.env (not in git); see .env.example.
+name: ai-portal
+
+services:
+  portal-api:
+    build: ../api
+    restart: unless-stopped
+    environment:
+      PORTAL_DATABASE_URL: postgres://portal_api:${PORTAL_DB_PASSWORD}@db:5432/postgres
+      PORTAL_VALKEY_URL: ${PORTAL_VALKEY_URL}
+      PORTAL_JWKS_URL: http://auth:9999/.well-known/jwks.json
+      PORTAL_JWT_ISSUER: ${PUBLIC_ACCOUNT_URL}/auth/v1
+      PORTAL_CLI_VERIFY_URL: ${PUBLIC_ACCOUNT_URL}/cli
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8200/portal/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks: [supabase]
+
+  edge:
+    build:
+      context: ..
+      dockerfile: deploy/edge/Dockerfile
+      args:
+        VITE_SUPABASE_KEY: ${SUPABASE_PUBLISHABLE_KEY}
+        VITE_FIRST_PARTY_CLIENTS: ${FIRST_PARTY_CLIENTS:-}
+    restart: unless-stopped
+    depends_on: [portal-api]
+    ports:
+      - "80:80"
+    volumes:
+      - ./install:/usr/share/nginx/install:ro
+    networks: [supabase]
+
+networks:
+  supabase:
+    name: supabase_default
+    external: true

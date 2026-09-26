@@ -1,11 +1,17 @@
-# AI portal services: the public edge and portal-api. Runs on its own host; Supabase,
-# Valkey and switchyard-gate are reached over the LAN.
+# AI portal: portal-api serves the web app, the installers, the portal API, and Supabase
+# Auth's public OIDC endpoints. The Cloudflare tunnel routes each public path straight to
+# its service (see deploy/cloudflare/tunnel-ingress.json); no reverse proxy runs here.
 # Secrets and host-specific values come from deploy/.env (not in git); see .env.example.
 name: ai-portal
 
 services:
   portal-api:
-    build: ../api
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+      args:
+        VITE_SUPABASE_KEY: ${SUPABASE_PUBLISHABLE_KEY}
+        VITE_FIRST_PARTY_CLIENTS: ${FIRST_PARTY_CLIENTS:-}
     restart: unless-stopped
     environment:
       PORTAL_DATABASE_URL: ${PORTAL_DATABASE_URL}
@@ -13,26 +19,12 @@ services:
       PORTAL_JWKS_URL: ${SUPABASE_AUTH_URL}/.well-known/jwks.json
       PORTAL_JWT_ISSUER: ${PUBLIC_ACCOUNT_URL}/auth/v1
       PORTAL_CLI_VERIFY_URL: ${PUBLIC_ACCOUNT_URL}/cli
+      PORTAL_SUPABASE_AUTH_URL: ${SUPABASE_AUTH_URL}
+      PORTAL_API_HOST: ${PUBLIC_API_HOST:-api.elytrondefense.com}
+    ports:
+      - "8200:8200"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8200/portal/health')"]
       interval: 10s
       timeout: 3s
       retries: 3
-
-  edge:
-    build:
-      context: ..
-      dockerfile: deploy/edge/Dockerfile
-      args:
-        VITE_SUPABASE_KEY: ${SUPABASE_PUBLISHABLE_KEY}
-        VITE_FIRST_PARTY_CLIENTS: ${FIRST_PARTY_CLIENTS:-}
-    restart: unless-stopped
-    depends_on: [portal-api]
-    environment:
-      SUPABASE_AUTH_URL: ${SUPABASE_AUTH_URL}
-      SUPABASE_GATEWAY_URL: ${SUPABASE_GATEWAY_URL}
-      GATE_URL: ${GATE_URL}
-    ports:
-      - "80:80"
-    volumes:
-      - ./install:/usr/share/nginx/install:ro

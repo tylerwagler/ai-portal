@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import dataclass
 
 import asyncpg
+import httpx
 import jwt
 import redis.asyncio as redis
 from fastapi import Depends, HTTPException, Request
@@ -17,6 +18,7 @@ class Resources:
     db: asyncpg.Pool
     valkey: redis.Redis
     jwks: jwt.PyJWKClient
+    http: httpx.AsyncClient
 
 
 @dataclass

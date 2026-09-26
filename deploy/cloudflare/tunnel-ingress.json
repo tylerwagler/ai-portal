@@ -1,0 +1,40 @@
+{
+  "_comment": "Ingress for Cloudflare tunnel elytron-dmz (cloudflared on CT 120, DMZ). Applied with PUT /accounts/{account}/cfd_tunnel/{tunnel}/configurations as config.ingress. Rules match in order; paths are regular expressions. Each origin needs a matching UniFi policy from the DMZ (cloudflared's MAC) to that address and port.",
+  "ingress": [
+    {
+      "hostname": "account.elytrondefense.com",
+      "path": "^/auth/v1/(\\.well-known/openid-configuration|oauth/(authorize|token|userinfo))$",
+      "service": "http://10.20.20.211:8200",
+      "originRequest": { "httpHostHeader": "account.elytrondefense.com", "connectTimeout": 10 }
+    },
+    {
+      "hostname": "account.elytrondefense.com",
+      "path": "^/auth/v1/",
+      "service": "http://10.20.20.162:8000",
+      "originRequest": { "httpHostHeader": "account.elytrondefense.com", "connectTimeout": 10 }
+    },
+    {
+      "hostname": "account.elytrondefense.com",
+      "path": "^/\\.well-known/oauth-authorization-server",
+      "service": "http://10.20.20.162:8000",
+      "originRequest": { "httpHostHeader": "account.elytrondefense.com", "connectTimeout": 10 }
+    },
+    {
+      "hostname": "account.elytrondefense.com",
+      "service": "http://10.20.20.211:8200",
+      "originRequest": { "httpHostHeader": "account.elytrondefense.com", "connectTimeout": 10 }
+    },
+    {
+      "hostname": "api.elytrondefense.com",
+      "path": "^/(v1/|health$)",
+      "service": "http://10.20.20.173:8100",
+      "originRequest": { "httpHostHeader": "api.elytrondefense.com", "connectTimeout": 10 }
+    },
+    {
+      "hostname": "api.elytrondefense.com",
+      "service": "http://10.20.20.211:8200",
+      "originRequest": { "httpHostHeader": "api.elytrondefense.com", "connectTimeout": 10 }
+    },
+    { "service": "http_status:404" }
+  ]
+}

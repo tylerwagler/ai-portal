@@ -50,8 +50,24 @@ class Person:
         self.headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
+API_HOST = "api.example.test"
+
+
 @pytest.fixture(scope="session")
-def client():
+def site_dirs(tmp_path_factory):
+    """A stand-in built web app and installer directory."""
+    web = tmp_path_factory.mktemp("web")
+    (web / "index.html").write_text("<title>AI Portal</title>")
+    (web / "assets").mkdir()
+    (web / "assets" / "app-1234.js").write_text("console.log(1)")
+    install = tmp_path_factory.mktemp("install")
+    (install / "setup.sh").write_text("#!/bin/bash\necho hi\n")
+    return web, install
+
+
+@pytest.fixture(scope="session")
+def client(site_dirs):
+    web, install = site_dirs
     settings = Settings(
         database_url=os.environ["TEST_DATABASE_URL"],
         valkey_url=os.environ.get("TEST_VALKEY_URL", "redis://127.0.0.1:6390/0"),
@@ -59,6 +75,11 @@ def client():
         jwt_issuer=f"{SUPABASE}/auth/v1",
         cli_verify_url="https://account.example.test/cli",
         run_usage_consumer=False,
+        # The spike's edge already exposes Auth's OIDC endpoints without an apikey.
+        supabase_auth_url=f"{SUPABASE}/auth/v1",
+        web_dir=str(web),
+        install_dir=str(install),
+        api_host=API_HOST,
     )
     with TestClient(create_app(settings)) as c:
         yield c

@@ -1,4 +1,5 @@
 # Edge for the AI portal. TLS ends at the Cloudflare tunnel; this listens on plain HTTP.
+# Rendered by the nginx image at start: ${SUPABASE_AUTH_URL}, ${SUPABASE_GATEWAY_URL} and ${GATE_URL} come from the environment.
 #   account.elytrondefense.com  portal web app, Supabase Auth, portal-api
 #   api.elytrondefense.com      switchyard-gate (/v1), portal-api (/portal, for the CLI), installers
 
@@ -15,8 +16,8 @@ server {
     server_name account.elytrondefense.com;
     root /usr/share/nginx/account;
 
-    set $auth http://auth:9999;
-    set $supabase http://kong:8000;
+    set $auth ${SUPABASE_AUTH_URL};
+    set $supabase ${SUPABASE_GATEWAY_URL};
     set $portal_api http://portal-api:8200;
 
     add_header X-Content-Type-Options nosniff always;
@@ -66,7 +67,7 @@ server {
     listen 80;
     server_name api.elytrondefense.com;
 
-    set $gate http://switchyard-gate.defense.lan:8100;
+    set $gate ${GATE_URL};
     set $portal_api http://portal-api:8200;
 
     # Model traffic: long, streamed responses and large request bodies.

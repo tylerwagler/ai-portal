@@ -12,5 +12,5 @@ ARG VITE_CHAT_URL=https://ai.elytrondefense.com
 RUN test -n "$VITE_SUPABASE_KEY" && npm run build
 
 FROM nginx:1.29-alpine
-COPY deploy/edge/nginx.conf /etc/nginx/conf.d/default.conf
+COPY deploy/edge/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=web /web/dist /usr/share/nginx/account

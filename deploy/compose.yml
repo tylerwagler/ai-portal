@@ -1,4 +1,5 @@
-# AI portal services, next to the Supabase compose project on the same host.
+# AI portal services: the public edge and portal-api. Runs on its own host; Supabase,
+# Valkey and switchyard-gate are reached over the LAN.
 # Secrets and host-specific values come from deploy/.env (not in git); see .env.example.
 name: ai-portal
 
@@ -7,9 +8,9 @@ services:
     build: ../api
     restart: unless-stopped
     environment:
-      PORTAL_DATABASE_URL: postgres://portal_api:${PORTAL_DB_PASSWORD}@db:5432/postgres
+      PORTAL_DATABASE_URL: ${PORTAL_DATABASE_URL}
       PORTAL_VALKEY_URL: ${PORTAL_VALKEY_URL}
-      PORTAL_JWKS_URL: http://auth:9999/.well-known/jwks.json
+      PORTAL_JWKS_URL: ${SUPABASE_AUTH_URL}/.well-known/jwks.json
       PORTAL_JWT_ISSUER: ${PUBLIC_ACCOUNT_URL}/auth/v1
       PORTAL_CLI_VERIFY_URL: ${PUBLIC_ACCOUNT_URL}/cli
     healthcheck:
@@ -17,7 +18,6 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
-    networks: [supabase]
 
   edge:
     build:
@@ -28,13 +28,11 @@ services:
         VITE_FIRST_PARTY_CLIENTS: ${FIRST_PARTY_CLIENTS:-}
     restart: unless-stopped
     depends_on: [portal-api]
+    environment:
+      SUPABASE_AUTH_URL: ${SUPABASE_AUTH_URL}
+      SUPABASE_GATEWAY_URL: ${SUPABASE_GATEWAY_URL}
+      GATE_URL: ${GATE_URL}
     ports:
       - "80:80"
     volumes:
       - ./install:/usr/share/nginx/install:ro
-    networks: [supabase]
-
-networks:
-  supabase:
-    name: supabase_default
-    external: true

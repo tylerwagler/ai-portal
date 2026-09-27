@@ -6,6 +6,7 @@ import './app.css';
 import { SignedIn } from './components/Layout';
 import Account from './pages/Account';
 import Admin from './pages/Admin';
+import Dashboard from './pages/Dashboard';
 import Cli from './pages/Cli';
 import Consent from './pages/Consent';
 import Login from './pages/Login';
@@ -22,6 +23,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/oauth/consent" element={<Consent />} />
         <Route path="/cli" element={<SignedIn><Cli /></SignedIn>} />
         <Route path="/admin" element={<SignedIn><Admin /></SignedIn>} />
+        <Route path="/dashboard" element={<SignedIn><Dashboard /></SignedIn>} />
         <Route path="*" element={<SignedIn><Account /></SignedIn>} />
       </Routes>
     </BrowserRouter>

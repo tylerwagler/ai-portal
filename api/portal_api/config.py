@@ -2,6 +2,7 @@
 
 import os
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,14 @@ class Settings:
     install_dir: str = ""
     # Host name of the API; only /portal and /install are served there.
     api_host: str = ""
+    # The system dashboard (pulsar-gui): its public host and where it runs; unset means off.
+    dashboard_host: str = ""
+    dashboard_upstream: str = ""
+
+    @property
+    def account_host(self) -> str:
+        """The portal's own host, where users sign in."""
+        return urlparse(self.cli_verify_url).hostname or ""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -35,4 +44,6 @@ class Settings:
             web_dir=os.environ.get("PORTAL_WEB_DIR", ""),
             install_dir=os.environ.get("PORTAL_INSTALL_DIR", ""),
             api_host=os.environ.get("PORTAL_API_HOST", ""),
+            dashboard_host=os.environ.get("PORTAL_DASHBOARD_HOST", ""),
+            dashboard_upstream=os.environ.get("PORTAL_DASHBOARD_UPSTREAM", "").rstrip("/"),
         )

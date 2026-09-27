@@ -51,6 +51,43 @@ class Person:
 
 
 API_HOST = "api.example.test"
+DASH_HOST = "dash.example.test"
+
+
+@pytest.fixture(scope="session")
+def fake_dashboard():
+    """A stand-in pulsar-gui: a page, an API call, and a WebSocket that echoes."""
+    import socket
+    import threading
+    import time
+
+    import uvicorn
+    from starlette.applications import Starlette
+    from starlette.responses import HTMLResponse, JSONResponse
+    from starlette.routing import Route, WebSocketRoute
+
+    async def page(request):
+        return HTMLResponse("<title>observatory</title>")
+
+    async def state(request):
+        return JSONResponse({"seen_cookie": "cookie" in request.headers})
+
+    async def ws(websocket):
+        await websocket.accept()
+        await websocket.send_text("hello")
+        async for message in websocket.iter_text():
+            await websocket.send_text(f"echo:{message}")
+
+    app = Starlette(routes=[Route("/", page), Route("/api/state", state), WebSocketRoute("/ws", ws)])
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    threading.Thread(target=server.run, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    yield f"http://127.0.0.1:{port}"
+    server.should_exit = True
 
 
 @pytest.fixture(scope="session")
@@ -66,7 +103,7 @@ def site_dirs(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
-def client(site_dirs):
+def client(site_dirs, fake_dashboard):
     web, install = site_dirs
     settings = Settings(
         database_url=os.environ["TEST_DATABASE_URL"],
@@ -80,6 +117,8 @@ def client(site_dirs):
         web_dir=str(web),
         install_dir=str(install),
         api_host=API_HOST,
+        dashboard_host=DASH_HOST,
+        dashboard_upstream=fake_dashboard,
     )
     with TestClient(create_app(settings)) as c:
         yield c

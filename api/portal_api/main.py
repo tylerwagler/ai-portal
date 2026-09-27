@@ -10,7 +10,7 @@ import jwt
 import redis.asyncio as redis
 from fastapi import FastAPI
 
-from portal_api import admin, cli_login, keys, me, oidc_proxy, static, usage_consumer
+from portal_api import admin, cli_login, dashboard, keys, me, oidc_proxy, static, usage_consumer
 from portal_api.config import Settings
 from portal_api.deps import Resources
 
@@ -40,7 +40,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="AI Portal API", lifespan=lifespan, docs_url=None, redoc_url=None,
                   openapi_url=None)
-    for module in (me, keys, cli_login, admin, oidc_proxy):
+    app.add_middleware(dashboard.DashboardHost)
+    for module in (me, keys, cli_login, admin, oidc_proxy, dashboard):
         app.include_router(module.router)
 
     @app.get("/portal/health")

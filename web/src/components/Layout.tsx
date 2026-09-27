@@ -3,7 +3,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 import { Link, NavLink, Navigate, useLocation } from 'react-router-dom';
 
 import { useApi, type Me } from '../lib/api';
-import { CHAT_URL, DASHBOARD_URL } from '../lib/config';
+import { CHAT_URL } from '../lib/config';
 import { supabase, useSession } from '../lib/supabase';
 
 const MeContext = createContext<{ me: Me; reload: () => void } | null>(null);
@@ -36,7 +36,7 @@ export function SignedIn({ children }: { children: ReactNode }) {
             <Tab to="/" icon={<User size={16} />}>Account</Tab>
             {me.user.role === 'admin' && <Tab to="/admin" icon={<Shield size={16} />}>Admin</Tab>}
             {me.user.role === 'admin' && (
-              <a href={DASHBOARD_URL} target="_blank" rel="noreferrer"
+              <a href="/dashboard" target="_blank" rel="noreferrer"
                  className="flex items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-dark-800">
                 <Activity size={16} /> Dashboard
               </a>

@@ -21,6 +21,8 @@ services:
       PORTAL_CLI_VERIFY_URL: ${PUBLIC_ACCOUNT_URL}/cli
       PORTAL_SUPABASE_AUTH_URL: ${SUPABASE_AUTH_URL}
       PORTAL_API_HOST: ${PUBLIC_API_HOST:-api.elytrondefense.com}
+      PORTAL_DASHBOARD_HOST: ${DASHBOARD_HOST:-dash.elytrondefense.com}
+      PORTAL_DASHBOARD_UPSTREAM: ${DASHBOARD_UPSTREAM:-http://switchyard-gate.defense.lan:8081}
     ports:
       - "8200:8200"
     healthcheck:

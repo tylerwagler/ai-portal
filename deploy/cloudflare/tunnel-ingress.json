@@ -41,13 +41,10 @@
       "originRequest": { "httpHostHeader": "ai.elytrondefense.com", "connectTimeout": 10 }
     },
     {
-      "_comment": "pulsar-gui on CT 124, behind the Cloudflare Access app 'System dashboard'; cloudflared also rejects requests without that app's token.",
+      "_comment": "pulsar-gui (CT 124:8081), served through portal-api, which lets in only signed-in portal admins.",
       "hostname": "dash.elytrondefense.com",
-      "service": "http://10.20.20.173:8081",
-      "originRequest": {
-        "connectTimeout": 10,
-        "access": { "required": true, "teamName": "aged-thunder-ae07", "audTag": ["3aa9e0895b095add3ac874c31e875921601ee4fd8db525b9068f7777c06f15bb"] }
-      }
+      "service": "http://10.20.20.211:8200",
+      "originRequest": { "httpHostHeader": "dash.elytrondefense.com", "connectTimeout": 10 }
     },
     { "service": "http_status:404" }
   ]

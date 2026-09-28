@@ -27,7 +27,7 @@
     {
       "hostname": "api.elytrondefense.com",
       "path": "^/(v1/|health$)",
-      "service": "http://10.20.20.173:8100",
+      "service": "http://10.20.20.11:8100",
       "originRequest": { "httpHostHeader": "api.elytrondefense.com", "connectTimeout": 10 }
     },
     {

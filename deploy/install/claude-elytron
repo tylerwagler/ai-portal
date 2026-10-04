@@ -22,7 +22,7 @@
 
 set -u
 
-SCRIPT_VERSION="2.0.0"
+SCRIPT_VERSION="2.0.1"
 DEFAULT_URL="https://api.elytrondefense.com"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/claude-elytron"
 CONFIG_FILE="$CONFIG_DIR/env"
@@ -205,11 +205,17 @@ export CLAUDE_CODE_MAX_CONTEXT_TOKENS="$CTX_TOKENS"
 # The token-budget reminder changes on every session, which defeats the server's
 # prefix cache across sessions. Everything else stays at Claude Code's defaults.
 export CLAUDE_CODE_TOTAL_TOKENS_REMINDER=off
+# Tell the gateway what each request is (main turn, subagent, classifier, compaction).
+export CLAUDE_CODE_GATEWAY_HINT_HEADERS=1
+# The gateway cannot yet run the server-side auto-mode checks, so don't ask for them;
+# this also stops the "isn't eligible" notice. Set it to 1 to test the gateway's checks.
+export CLAUDE_CODE_AUTO_MODE_SERVER="${CLAUDE_CODE_AUTO_MODE_SERVER:-0}"
 
 if [ "${1:-}" = "--env" ] || [ "${1:-}" = "--elytron-env" ]; then
     for v in ANTHROPIC_BASE_URL ANTHROPIC_DEFAULT_MODEL ANTHROPIC_DEFAULT_{HAIKU,SONNET,OPUS,FABLE}_MODEL \
              CLAUDE_CODE_SUBAGENT_MODEL CLAUDE_CODE_MAX_CONTEXT_TOKENS CLAUDE_CODE_TOTAL_TOKENS_REMINDER \
-             CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY; do
+             CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY CLAUDE_CODE_GATEWAY_HINT_HEADERS \
+             CLAUDE_CODE_AUTO_MODE_SERVER; do
         echo "$v=${!v}"
     done
     echo "ANTHROPIC_AUTH_TOKEN=$(mask "$ANTHROPIC_AUTH_TOKEN")"

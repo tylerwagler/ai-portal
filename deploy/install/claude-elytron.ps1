@@ -14,7 +14,7 @@
 #   model (deepseek-v4-flash), small_model (gemma4-26b-a4b), ctx_tokens (1000000)
 
 $ErrorActionPreference = "Stop"
-$ScriptVersion = "2.0.0"
+$ScriptVersion = "2.0.1"
 $DefaultUrl = "https://api.elytrondefense.com"
 $ConfigDir = Join-Path $env:USERPROFILE ".config\claude-elytron"
 $ConfigFile = Join-Path $ConfigDir "config.json"
@@ -166,12 +166,18 @@ $env:CLAUDE_CODE_SUBAGENT_MODEL = $Model
 $env:CLAUDE_CODE_MAX_CONTEXT_TOKENS = $CtxTokens
 # The token-budget reminder changes every session and defeats the server's prefix cache.
 $env:CLAUDE_CODE_TOTAL_TOKENS_REMINDER = "off"
+# Tell the gateway what each request is (main turn, subagent, classifier, compaction).
+$env:CLAUDE_CODE_GATEWAY_HINT_HEADERS = "1"
+# The gateway cannot yet run the server-side auto-mode checks, so don't ask for them;
+# this also stops the "isn't eligible" notice. Set it to 1 to test the gateway's checks.
+if (-not $env:CLAUDE_CODE_AUTO_MODE_SERVER) { $env:CLAUDE_CODE_AUTO_MODE_SERVER = "0" }
 
 if ($args[0] -eq "--env") {
     foreach ($v in "ANTHROPIC_BASE_URL", "ANTHROPIC_DEFAULT_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
                    "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL",
                    "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "CLAUDE_CODE_TOTAL_TOKENS_REMINDER",
-                   "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY") {
+                   "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY", "CLAUDE_CODE_GATEWAY_HINT_HEADERS",
+                   "CLAUDE_CODE_AUTO_MODE_SERVER") {
         Write-Host "$v=$([Environment]::GetEnvironmentVariable($v))"
     }
     Write-Host "ANTHROPIC_AUTH_TOKEN=$(Mask $Config.api_key)"

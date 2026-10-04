@@ -30,18 +30,18 @@ with batch as (
     stream_id text, ts bigint, user_id uuid, api_key_id uuid, via text, model text,
     input_tokens bigint, output_tokens bigint, cached_tokens bigint,
     cache_creation_tokens bigint, reasoning_tokens bigint, billable_tokens bigint,
-    latency_ms integer, complete boolean, estimated boolean, chat_id text)
+    latency_ms integer, complete boolean, estimated boolean, chat_id text, request_class text)
 ),
 inserted as (
   insert into public.usage_events (stream_id, ts, user_id, api_key_id, via, model,
     input_tokens, output_tokens, cached_tokens, cache_creation_tokens, reasoning_tokens,
-    billable_tokens, latency_ms, complete, estimated, chat_id)
+    billable_tokens, latency_ms, complete, estimated, chat_id, request_class)
   select b.stream_id, to_timestamp(b.ts), b.user_id,
          -- A key deleted since the request still bills the user.
          (select k.id from public.api_keys k where k.id = b.api_key_id),
          b.via, b.model, b.input_tokens, b.output_tokens, b.cached_tokens,
          b.cache_creation_tokens, b.reasoning_tokens, b.billable_tokens,
-         b.latency_ms, b.complete, b.estimated, b.chat_id
+         b.latency_ms, b.complete, b.estimated, b.chat_id, b.request_class
   from batch b
   where exists (select 1 from public.profiles p where p.id = b.user_id)
   on conflict (stream_id) do nothing
@@ -73,7 +73,7 @@ def to_row(stream_id: str, fields: dict) -> dict:
     row = {"stream_id": stream_id, "user_id": fields["user_id"],
            "api_key_id": fields.get("api_key_id"), "via": fields["via"], "model": fields["model"],
            "complete": fields.get("complete") == "1", "estimated": fields.get("estimated") == "1",
-           "chat_id": fields.get("chat_id")}
+           "chat_id": fields.get("chat_id"), "request_class": fields.get("request_class")}
     for name in NUMBER_FIELDS:
         row[name] = int(fields.get(name) or 0)
     return row

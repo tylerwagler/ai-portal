@@ -14,7 +14,7 @@
 #   model (deepseek-v4-flash), small_model (gemma4-26b-a4b), ctx_tokens (1000000)
 
 $ErrorActionPreference = "Stop"
-$ScriptVersion = "2.0.1"
+$ScriptVersion = "2.0.2"
 $DefaultUrl = "https://api.elytrondefense.com"
 $ConfigDir = Join-Path $env:USERPROFILE ".config\claude-elytron"
 $ConfigFile = Join-Path $ConfigDir "config.json"
@@ -168,9 +168,10 @@ $env:CLAUDE_CODE_MAX_CONTEXT_TOKENS = $CtxTokens
 $env:CLAUDE_CODE_TOTAL_TOKENS_REMINDER = "off"
 # Tell the gateway what each request is (main turn, subagent, classifier, compaction).
 $env:CLAUDE_CODE_GATEWAY_HINT_HEADERS = "1"
-# The gateway cannot yet run the server-side auto-mode checks, so don't ask for them;
-# this also stops the "isn't eligible" notice. Set it to 1 to test the gateway's checks.
-if (-not $env:CLAUDE_CODE_AUTO_MODE_SERVER) { $env:CLAUDE_CODE_AUTO_MODE_SERVER = "0" }
+# Ask the gateway for server-side auto-mode checks: Switchyard's judge answers each tool use.
+# Releases after 2026-10-23 classify only server-side. Set 0 to opt out (local classification,
+# while Claude Code still has it).
+if (-not $env:CLAUDE_CODE_AUTO_MODE_SERVER) { $env:CLAUDE_CODE_AUTO_MODE_SERVER = "1" }
 
 if ($args[0] -eq "--env") {
     foreach ($v in "ANTHROPIC_BASE_URL", "ANTHROPIC_DEFAULT_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",

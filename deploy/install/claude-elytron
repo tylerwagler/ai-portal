@@ -22,7 +22,7 @@
 
 set -u
 
-SCRIPT_VERSION="2.0.1"
+SCRIPT_VERSION="2.0.2"
 DEFAULT_URL="https://api.elytrondefense.com"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/claude-elytron"
 CONFIG_FILE="$CONFIG_DIR/env"
@@ -207,9 +207,10 @@ export CLAUDE_CODE_MAX_CONTEXT_TOKENS="$CTX_TOKENS"
 export CLAUDE_CODE_TOTAL_TOKENS_REMINDER=off
 # Tell the gateway what each request is (main turn, subagent, classifier, compaction).
 export CLAUDE_CODE_GATEWAY_HINT_HEADERS=1
-# The gateway cannot yet run the server-side auto-mode checks, so don't ask for them;
-# this also stops the "isn't eligible" notice. Set it to 1 to test the gateway's checks.
-export CLAUDE_CODE_AUTO_MODE_SERVER="${CLAUDE_CODE_AUTO_MODE_SERVER:-0}"
+# Ask the gateway for server-side auto-mode checks: Switchyard's judge answers each tool use.
+# Releases after 2026-10-23 classify only server-side. Set 0 to opt out (local classification,
+# while Claude Code still has it).
+export CLAUDE_CODE_AUTO_MODE_SERVER="${CLAUDE_CODE_AUTO_MODE_SERVER:-1}"
 
 if [ "${1:-}" = "--env" ] || [ "${1:-}" = "--elytron-env" ]; then
     for v in ANTHROPIC_BASE_URL ANTHROPIC_DEFAULT_MODEL ANTHROPIC_DEFAULT_{HAIKU,SONNET,OPUS,FABLE}_MODEL \

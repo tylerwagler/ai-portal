@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { SUPABASE_KEY } from './config';
 
 // Supabase is served from this same origin, behind the edge.
-export const supabase = createClient(window.location.origin, SUPABASE_KEY);
+// PKCE: the Microsoft sign-in comes back with a one-time code, never with tokens in the URL.
+export const supabase = createClient(window.location.origin, SUPABASE_KEY, { auth: { flowType: 'pkce' } });
 
 /** The current session; `undefined` while it is still loading. */
 export function useSession(): Session | null | undefined {

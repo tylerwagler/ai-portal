@@ -22,6 +22,13 @@ services:
       # Reject passwords from known breaches (Have I Been Pwned, k-anonymity); fail open if unreachable.
       GOTRUE_PASSWORD_HIBP_ENABLED: "true"
       GOTRUE_PASSWORD_HIBP_BLOOM_ENABLED: "true"
+      # Microsoft Entra ID, single tenant (Elytron, 590a429c-...): the only way in (2026-10-11).
+      # App registration "AI Portal"; redirect = account.elytrondefense.ai/auth/v1/callback.
+      GOTRUE_EXTERNAL_AZURE_ENABLED: "true"
+      GOTRUE_EXTERNAL_AZURE_CLIENT_ID: ${AZURE_CLIENT_ID}
+      GOTRUE_EXTERNAL_AZURE_SECRET: ${AZURE_SECRET}
+      GOTRUE_EXTERNAL_AZURE_REDIRECT_URI: ${API_EXTERNAL_URL}/callback
+      GOTRUE_EXTERNAL_AZURE_URL: https://login.microsoftonline.com/${AZURE_TENANT_ID}
   rest:
     image: postgrest/postgrest:v14.18
   realtime:

@@ -15,7 +15,7 @@
 
 $ErrorActionPreference = "Stop"
 $ScriptVersion = "2.0.2"
-$DefaultUrl = "https://api.elytrondefense.com"
+$DefaultUrl = "https://api.elytrondefense.ai"
 $ConfigDir = Join-Path $env:USERPROFILE ".config\claude-elytron"
 $ConfigFile = Join-Path $ConfigDir "config.json"
 

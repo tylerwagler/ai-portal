@@ -1,10 +1,10 @@
 #!/bin/bash
 # Installs claude-elytron on Linux or macOS.
-#   curl -fsSL https://api.elytrondefense.com/install/setup.sh | bash
+#   curl -fsSL https://api.elytrondefense.ai/install/setup.sh | bash
 # Optional: pass another server as the first argument (bash -s -- <url>).
 set -euo pipefail
 
-URL="${1:-https://api.elytrondefense.com}"
+URL="${1:-https://api.elytrondefense.ai}"
 URL="${URL%/}"
 BIN="$HOME/.local/bin"
 
@@ -26,7 +26,7 @@ install -m 755 "$tmp" "$BIN/claude-elytron"
 
 # Only a non-default server needs writing down; an existing config is kept as it is.
 config="${XDG_CONFIG_HOME:-$HOME/.config}/claude-elytron/env"
-if [ ! -f "$config" ] && [ "$URL" != "https://api.elytrondefense.com" ]; then
+if [ ! -f "$config" ] && [ "$URL" != "https://api.elytrondefense.ai" ]; then
     mkdir -p "$(dirname "$config")"
     ( umask 077; echo "CLAUDE_ELYTRON_URL=$URL" > "$config" )
 fi

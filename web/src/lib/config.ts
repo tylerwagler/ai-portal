@@ -10,5 +10,5 @@ export const FIRST_PARTY_CLIENTS = (import.meta.env.VITE_FIRST_PARTY_CLIENTS ?? 
   .split(',')
   .map((s: string) => s.trim())
   .filter(Boolean);
-export const CHAT_URL = import.meta.env.VITE_CHAT_URL ?? 'https://ai.elytrondefense.com';
-export const API_URL = import.meta.env.VITE_API_URL ?? 'https://api.elytrondefense.com';
+export const CHAT_URL = import.meta.env.VITE_CHAT_URL ?? 'https://ai.elytrondefense.ai';
+export const API_URL = import.meta.env.VITE_API_URL ?? 'https://api.elytrondefense.ai';

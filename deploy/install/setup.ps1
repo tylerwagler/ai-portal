@@ -1,9 +1,9 @@
 # Installs claude-elytron on Windows.
-#   irm https://api.elytrondefense.com/install/setup.ps1 | iex
+#   irm https://api.elytrondefense.ai/install/setup.ps1 | iex
 # Another server: $env:CLAUDE_ELYTRON_URL = "https://..." before running.
 
 $ErrorActionPreference = "Stop"
-$Url = if ($env:CLAUDE_ELYTRON_URL) { $env:CLAUDE_ELYTRON_URL.TrimEnd("/") } else { "https://api.elytrondefense.com" }
+$Url = if ($env:CLAUDE_ELYTRON_URL) { $env:CLAUDE_ELYTRON_URL.TrimEnd("/") } else { "https://api.elytrondefense.ai" }
 $Bin = Join-Path $env:USERPROFILE ".local\bin"
 
 Write-Host "== claude-elytron installer ==" -ForegroundColor Cyan
@@ -27,7 +27,7 @@ Move-Item -Force $tmp (Join-Path $Bin "claude-elytron.ps1")
 Set-Content -Path (Join-Path $Bin "claude-elytron.cmd") -Encoding ASCII `
     -Value '@powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0claude-elytron.ps1" %*'
 
-if ($Url -ne "https://api.elytrondefense.com") {
+if ($Url -ne "https://api.elytrondefense.ai") {
     $configDir = Join-Path $env:USERPROFILE ".config\claude-elytron"
     New-Item -ItemType Directory -Path $configDir -Force | Out-Null
     $configFile = Join-Path $configDir "config.json"

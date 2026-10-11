@@ -35,7 +35,7 @@ async def web_app(path: str, request: Request, res: Resources = Depends(resource
     host = request.headers.get("host", "").split(":")[0]
     # Paths of APIs (ours or Supabase's) are never pages: answer 404, not the app.
     api_prefixes = ("portal/", "auth/", "rest/", "storage/", "realtime/", "functions/", "graphql/", "v1/")
-    if not s.web_dir or (s.api_host and host == s.api_host) or path.startswith(api_prefixes):
+    if not s.web_dir or host in s.api_hosts or path.startswith(api_prefixes):
         raise HTTPException(404)
     web = Path(s.web_dir).resolve()
     file = (web / path).resolve()

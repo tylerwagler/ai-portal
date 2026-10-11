@@ -7,8 +7,8 @@ COPY web ./
 # Public values only (publishable key, OAuth client ids, URLs).
 ARG VITE_SUPABASE_KEY
 ARG VITE_FIRST_PARTY_CLIENTS=""
-ARG VITE_API_URL=https://api.elytrondefense.com
-ARG VITE_CHAT_URL=https://ai.elytrondefense.com
+ARG VITE_API_URL=https://api.elytrondefense.ai
+ARG VITE_CHAT_URL=https://ai.elytrondefense.ai
 RUN test -n "$VITE_SUPABASE_KEY" && npm run build
 
 FROM python:3.13-slim

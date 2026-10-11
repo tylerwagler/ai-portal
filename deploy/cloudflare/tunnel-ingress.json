@@ -5,47 +5,142 @@
       "hostname": "account.elytrondefense.com",
       "path": "^/auth/v1/(\\.well-known/openid-configuration|oauth/(authorize|token|userinfo))$",
       "service": "http://10.20.20.211:8200",
-      "originRequest": { "httpHostHeader": "account.elytrondefense.com", "connectTimeout": 10 }
+      "originRequest": {
+        "httpHostHeader": "account.elytrondefense.com",
+        "connectTimeout": 10
+      }
+    },
+    {
+      "hostname": "account.elytrondefense.ai",
+      "path": "^/auth/v1/(\\.well-known/openid-configuration|oauth/(authorize|token|userinfo))$",
+      "service": "http://10.20.20.211:8200",
+      "originRequest": {
+        "httpHostHeader": "account.elytrondefense.ai",
+        "connectTimeout": 10
+      }
     },
     {
       "hostname": "account.elytrondefense.com",
       "path": "^/auth/v1/",
       "service": "http://10.20.20.162:8000",
-      "originRequest": { "httpHostHeader": "account.elytrondefense.com", "connectTimeout": 10 }
+      "originRequest": {
+        "httpHostHeader": "account.elytrondefense.com",
+        "connectTimeout": 10
+      }
+    },
+    {
+      "hostname": "account.elytrondefense.ai",
+      "path": "^/auth/v1/",
+      "service": "http://10.20.20.162:8000",
+      "originRequest": {
+        "httpHostHeader": "account.elytrondefense.ai",
+        "connectTimeout": 10
+      }
     },
     {
       "hostname": "account.elytrondefense.com",
       "path": "^/\\.well-known/oauth-authorization-server",
       "service": "http://10.20.20.162:8000",
-      "originRequest": { "httpHostHeader": "account.elytrondefense.com", "connectTimeout": 10 }
+      "originRequest": {
+        "httpHostHeader": "account.elytrondefense.com",
+        "connectTimeout": 10
+      }
+    },
+    {
+      "hostname": "account.elytrondefense.ai",
+      "path": "^/\\.well-known/oauth-authorization-server",
+      "service": "http://10.20.20.162:8000",
+      "originRequest": {
+        "httpHostHeader": "account.elytrondefense.ai",
+        "connectTimeout": 10
+      }
     },
     {
       "hostname": "account.elytrondefense.com",
       "service": "http://10.20.20.211:8200",
-      "originRequest": { "httpHostHeader": "account.elytrondefense.com", "connectTimeout": 10 }
+      "originRequest": {
+        "httpHostHeader": "account.elytrondefense.com",
+        "connectTimeout": 10
+      }
+    },
+    {
+      "hostname": "account.elytrondefense.ai",
+      "service": "http://10.20.20.211:8200",
+      "originRequest": {
+        "httpHostHeader": "account.elytrondefense.ai",
+        "connectTimeout": 10
+      }
     },
     {
       "hostname": "api.elytrondefense.com",
       "path": "^/(v1/|health$)",
       "service": "http://10.20.20.11:8100",
-      "originRequest": { "httpHostHeader": "api.elytrondefense.com", "connectTimeout": 10 }
+      "originRequest": {
+        "httpHostHeader": "api.elytrondefense.com",
+        "connectTimeout": 10
+      }
+    },
+    {
+      "hostname": "api.elytrondefense.ai",
+      "path": "^/(v1/|health$)",
+      "service": "http://10.20.20.11:8100",
+      "originRequest": {
+        "httpHostHeader": "api.elytrondefense.ai",
+        "connectTimeout": 10
+      }
     },
     {
       "hostname": "api.elytrondefense.com",
       "service": "http://10.20.20.211:8200",
-      "originRequest": { "httpHostHeader": "api.elytrondefense.com", "connectTimeout": 10 }
+      "originRequest": {
+        "httpHostHeader": "api.elytrondefense.com",
+        "connectTimeout": 10
+      }
+    },
+    {
+      "hostname": "api.elytrondefense.ai",
+      "service": "http://10.20.20.211:8200",
+      "originRequest": {
+        "httpHostHeader": "api.elytrondefense.ai",
+        "connectTimeout": 10
+      }
     },
     {
       "hostname": "ai.elytrondefense.com",
       "service": "http://10.20.20.6:8080",
-      "originRequest": { "httpHostHeader": "ai.elytrondefense.com", "connectTimeout": 10 }
+      "originRequest": {
+        "httpHostHeader": "ai.elytrondefense.com",
+        "connectTimeout": 10
+      }
+    },
+    {
+      "hostname": "ai.elytrondefense.ai",
+      "service": "http://10.20.20.6:8080",
+      "originRequest": {
+        "httpHostHeader": "ai.elytrondefense.ai",
+        "connectTimeout": 10
+      }
     },
     {
       "_comment": "pulsar-gui (CT 124:8081), served through portal-api, which lets in only signed-in portal admins.",
       "hostname": "dash.elytrondefense.com",
       "service": "http://10.20.20.211:8200",
-      "originRequest": { "httpHostHeader": "dash.elytrondefense.com", "connectTimeout": 10 }
+      "originRequest": {
+        "httpHostHeader": "dash.elytrondefense.com",
+        "connectTimeout": 10
+      }
     },
-    { "service": "http_status:404" }
+    {
+      "_comment": "pulsar-gui (CT 124:8081), served through portal-api, which lets in only signed-in portal admins.",
+      "hostname": "dash.elytrondefense.ai",
+      "service": "http://10.20.20.211:8200",
+      "originRequest": {
+        "httpHostHeader": "dash.elytrondefense.ai",
+        "connectTimeout": 10
+      }
+    },
+    {
+      "service": "http_status:404"
+    }
   ]
 }

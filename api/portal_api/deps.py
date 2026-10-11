@@ -48,7 +48,7 @@ async def current_user(request: Request, res: Resources = Depends(resources)) ->
         # The JWKS client fetches over HTTP on a cache miss; keep that off the event loop.
         key = await asyncio.to_thread(res.jwks.get_signing_key_from_jwt, token)
         claims = jwt.decode(token, key.key, algorithms=["ES256", "RS256"],
-                            audience="authenticated", issuer=res.settings.jwt_issuer)
+                            audience="authenticated", issuer=res.settings.jwt_issuers)
     except jwt.PyJWTError as e:
         raise HTTPException(401, f"invalid session: {e}") from None
     row = await res.db.fetchrow(

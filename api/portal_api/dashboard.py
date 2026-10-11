@@ -37,11 +37,14 @@ FORWARD_RESPONSE = ("content-type", "content-encoding", "cache-control", "etag",
 
 
 @router.post("/code")
-async def code(user: User = Depends(admin_user), res: Resources = Depends(resources)):
+async def code(request: Request, user: User = Depends(admin_user),
+               res: Resources = Depends(resources)):
     """A one-time code the browser trades for a dashboard session."""
     value = secrets.token_urlsafe(32)
     await res.valkey.set(f"dash:code:{value}", user.id, ex=CODE_TTL)
-    return {"code": value, "url": f"https://{res.settings.dashboard_host}/__auth?code={value}"}
+    # Hand out the dashboard on the domain the portal is being used from.
+    dash = res.settings.dashboard_host_for(request.headers.get("host", ""))
+    return {"code": value, "url": f"https://{dash}/__auth?code={value}"}
 
 
 class DashboardHost:
@@ -55,7 +58,7 @@ class DashboardHost:
             return await self.app(scope, receive, send)
         res: Resources | None = getattr(scope["app"].state, "resources", None)
         host = dict(scope["headers"]).get(b"host", b"").decode().split(":")[0]
-        if res is None or not res.settings.dashboard_host or host != res.settings.dashboard_host:
+        if res is None or host not in res.settings.dashboard_hosts:
             return await self.app(scope, receive, send)
         if scope["type"] == "websocket":
             return await websocket_proxy(res, WebSocket(scope, receive, send))

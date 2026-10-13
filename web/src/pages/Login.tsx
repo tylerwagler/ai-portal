@@ -4,9 +4,20 @@ import { Navigate, useSearchParams } from 'react-router-dom';
 import { Centered, ErrorNote } from '../components/Layout';
 import { supabase, useSession } from '../lib/supabase';
 
-/** Only same-origin paths are accepted as a destination after sign-in. */
+/** Auth's PKCE codes are UUIDs; /cli's own `code` (the CLI's 8-character user code) is not. */
+const AUTH_CODE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Only same-origin paths are accepted as a destination after sign-in, minus what Auth appended
+ * on an earlier attempt: supabase-js reads an `error` in the URL before the PKCE `code`, so a
+ * leftover error from one failed sign-in would make every later, successful one land back here.
+ */
 function safeNext(next: string | null): string {
-  return next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
+  if (!next || !next.startsWith('/') || next.startsWith('//')) return '/';
+  const url = new URL(next, window.location.origin);
+  for (const p of ['error', 'error_code', 'error_description']) url.searchParams.delete(p);
+  if (AUTH_CODE.test(url.searchParams.get('code') ?? '')) url.searchParams.delete('code');
+  return url.pathname + url.search;
 }
 
 /** Microsoft Entra ID, Elytron's tenant only, is the only way in. */

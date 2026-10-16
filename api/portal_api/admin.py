@@ -1,10 +1,11 @@
-"""Admin: accounts and plans. Changes reach the gate within its 30-second cache."""
+"""Admin: accounts, plans and the Entra sync. Changes reach the gate within its 30-second cache."""
 
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from portal_api import entra_sync
 from portal_api.deps import Resources, User, admin_user, resources
 
 router = APIRouter(prefix="/portal/admin", tags=["admin"])
@@ -34,7 +35,8 @@ class Tier(BaseModel):
 async def list_users(q: str = "", limit: int = 100, _: User = Depends(admin_user),
                      res: Resources = Depends(resources)):
     rows = await res.db.fetch(
-        """select p.id::text, p.email, p.display_name, p.role, p.status, p.tier_id, p.created_at,
+        """select p.id::text, p.email, p.display_name, p.role, p.status, p.disabled_by, p.tier_id,
+                  p.created_at, p.entra_oid is not null as entra_linked,
                   coalesce(sum(r.billable_tokens), 0)::bigint as tokens_30d,
                   coalesce(sum(r.requests), 0)::bigint as requests_30d
            from public.profiles p
@@ -52,11 +54,14 @@ async def change_user(user_id: str, body: UserChange, admin: User = Depends(admi
     changes = body.model_dump(exclude_none=True)
     if not changes:
         raise HTTPException(400, "nothing to change")
+    if "status" in changes:
+        # The Entra sync re-enables only accounts it disabled itself, never these.
+        changes["disabled_by"] = "admin" if changes["status"] == "disabled" else None
     sets = ", ".join(f"{column} = ${i}" for i, column in enumerate(changes, start=2))
     try:
         row = await res.db.fetchrow(
             f"update public.profiles set {sets}, updated_at = now() where id = $1::uuid "
-            "returning id::text, email, role, status, tier_id", user_id, *changes.values())
+            "returning id::text, email, role, status, disabled_by, tier_id", user_id, *changes.values())
     except Exception as e:  # unknown tier_id violates the foreign key
         raise HTTPException(400, str(e).splitlines()[0]) from None
     if row is None:
@@ -81,3 +86,16 @@ async def put_tier(tier_id: str, body: Tier, _: User = Depends(admin_user), res:
         f"insert into public.tiers ({', '.join(columns)}) values ({values}) "
         f"on conflict (id) do update set {updates} returning *", *t.values())
     return dict(row)
+
+
+@router.get("/entra")
+async def entra_status(_: User = Depends(admin_user), res: Resources = Depends(resources)):
+    row = await res.db.fetchrow("select * from public.entra_sync")
+    return {"configured": res.entra is not None, "last": dict(row) if row else None}
+
+
+@router.post("/entra/sync")
+async def entra_sync_now(_: User = Depends(admin_user), res: Resources = Depends(resources)):
+    if res.entra is None:
+        raise HTTPException(409, "the Entra sync is not configured")
+    return await entra_sync.sync_once(res.db, res.entra)

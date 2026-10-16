@@ -10,6 +10,7 @@ import redis.asyncio as redis
 from fastapi import Depends, HTTPException, Request
 
 from portal_api.config import Settings
+from portal_api.entra_sync import Graph
 
 
 @dataclass
@@ -19,6 +20,8 @@ class Resources:
     valkey: redis.Redis
     jwks: jwt.PyJWKClient
     http: httpx.AsyncClient
+    # Microsoft Graph, when the Entra sync is configured.
+    entra: Graph | None = None
 
 
 @dataclass

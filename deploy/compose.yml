@@ -24,6 +24,11 @@ services:
       PORTAL_API_HOST: ${PUBLIC_API_HOST:-api.elytrondefense.ai}
       PORTAL_DASHBOARD_HOST: ${DASHBOARD_HOST:-dash.elytrondefense.ai}
       PORTAL_DASHBOARD_UPSTREAM: ${DASHBOARD_UPSTREAM:-http://switchyard.defense.lan:8081}
+      # Entra access and role sync; off while the client secret is unset (see .env.example).
+      PORTAL_ENTRA_TENANT_ID: ${ENTRA_TENANT_ID:-}
+      PORTAL_ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:-}
+      PORTAL_ENTRA_CLIENT_SECRET: ${ENTRA_CLIENT_SECRET:-}
+      PORTAL_ENTRA_SYNC_SECONDS: ${ENTRA_SYNC_SECONDS:-900}
     ports:
       - "8200:8200"
     healthcheck:

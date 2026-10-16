@@ -14,7 +14,7 @@ from redis.backoff import ExponentialBackoff
 from redis.exceptions import ConnectionError as ValkeyConnectionError
 from redis.exceptions import TimeoutError as ValkeyTimeoutError
 
-from portal_api import admin, cli_login, dashboard, keys, me, oidc_proxy, static, usage_consumer
+from portal_api import admin, cli_login, dashboard, entra_sync, keys, me, oidc_proxy, static, usage_consumer
 from portal_api.config import Settings
 from portal_api.deps import Resources
 
@@ -41,17 +41,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         s = settings or Settings.from_env()
         db = await asyncpg.create_pool(s.database_url, min_size=1, max_size=10)
         valkey = connect_valkey(s.valkey_url)
+        http = oidc_proxy.http_client()
+        graph = entra_sync.Graph(http, s) if s.entra_configured else None
         app.state.resources = Resources(settings=s, db=db, valkey=valkey,
                                         jwks=jwt.PyJWKClient(s.jwks_url, cache_keys=True, lifespan=3600),
-                                        http=oidc_proxy.http_client())
-        consumer = asyncio.create_task(usage_consumer.run(db, valkey)) if s.run_usage_consumer else None
+                                        http=http, entra=graph)
+        tasks = []
+        if s.run_usage_consumer:
+            tasks.append(asyncio.create_task(usage_consumer.run(db, valkey)))
+        if graph:
+            tasks.append(asyncio.create_task(entra_sync.run(db, graph, s.entra_sync_seconds)))
         try:
             yield
         finally:
-            if consumer:
-                consumer.cancel()
+            for task in tasks:
+                task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
-                    await consumer
+                    await task
             await app.state.resources.http.aclose()
             await valkey.aclose()
             await db.close()

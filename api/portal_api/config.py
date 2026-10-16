@@ -29,6 +29,16 @@ class Settings:
     # runs; unset means off.
     dashboard_host: str = ""
     dashboard_upstream: str = ""
+    # Microsoft Entra ID, for the access and role sync (portal_api/entra_sync.py): the tenant, and
+    # an app registration allowed to read it through Microsoft Graph. Unset means no sync.
+    entra_tenant_id: str = ""
+    entra_client_id: str = ""
+    entra_client_secret: str = ""
+    entra_sync_seconds: int = 900
+
+    @property
+    def entra_configured(self) -> bool:
+        return bool(self.entra_tenant_id and self.entra_client_id and self.entra_client_secret)
 
     @property
     def jwt_issuers(self) -> list[str]:
@@ -68,6 +78,10 @@ class Settings:
             api_host=os.environ.get("PORTAL_API_HOST", ""),
             dashboard_host=os.environ.get("PORTAL_DASHBOARD_HOST", ""),
             dashboard_upstream=os.environ.get("PORTAL_DASHBOARD_UPSTREAM", "").rstrip("/"),
+            entra_tenant_id=os.environ.get("PORTAL_ENTRA_TENANT_ID", ""),
+            entra_client_id=os.environ.get("PORTAL_ENTRA_CLIENT_ID", ""),
+            entra_client_secret=os.environ.get("PORTAL_ENTRA_CLIENT_SECRET", ""),
+            entra_sync_seconds=int(os.environ.get("PORTAL_ENTRA_SYNC_SECONDS", "900")),
         )
 
 

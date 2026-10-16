@@ -1,4 +1,4 @@
-import { Save } from 'lucide-react';
+import { RefreshCw, Save } from 'lucide-react';
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 
@@ -10,10 +10,27 @@ type AdminUser = {
   email: string;
   role: 'pending' | 'user' | 'admin';
   status: 'active' | 'disabled';
+  disabled_by: 'admin' | 'entra' | null;
   tier_id: string;
   created_at: string;
+  entra_linked: boolean;
   tokens_30d: number;
   requests_30d: number;
+};
+
+type EntraSync = {
+  configured: boolean;
+  last: {
+    ran_at: string;
+    ok: boolean;
+    message: string;
+    manages_roles: boolean;
+    linked: number;
+    unlinked: number;
+    disabled: number;
+    enabled: number;
+    role_changes: number;
+  } | null;
 };
 
 type Tier = {
@@ -44,9 +61,53 @@ export default function Admin() {
   if (me.user.role !== 'admin') return <Navigate to="/" replace />;
   return (
     <>
+      <Entra />
       <Users />
       <Tiers />
     </>
+  );
+}
+
+function Entra() {
+  const { data, error, reload } = useApi<EntraSync>('/admin/entra');
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string>();
+  if (!data?.configured) return error ? <ErrorNote>{error}</ErrorNote> : null;
+  const last = data.last;
+
+  async function syncNow() {
+    setBusy(true);
+    try {
+      await api('/admin/entra/sync', { method: 'POST' });
+      setActionError(undefined);
+      reload();
+    } catch (err) {
+      setActionError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold text-white">Microsoft Entra ID</h2>
+        <button className="btn-ghost px-3 py-1.5 text-sm" onClick={syncNow} disabled={busy}>
+          <RefreshCw size={14} className={busy ? 'animate-spin' : ''} /> Sync now
+        </button>
+      </div>
+      <p className="text-sm text-dark-500">
+        Accounts disabled, deleted or unassigned in Entra are disabled here, with their API keys.
+        {last?.manages_roles && ' Admin comes from the Portal.Admin app role; role changes here last until the next sync.'}
+      </p>
+      {last ? (
+        <p className={`text-sm ${last.ok ? 'text-dark-300' : 'text-accent-red'}`}>
+          Last sync {new Date(last.ran_at).toLocaleString()}: {last.message}
+          {last.ok && ` · ${last.linked} linked, ${last.unlinked} not linked · ${last.disabled} disabled, ${last.enabled} re-enabled, ${last.role_changes} role changes`}
+        </p>
+      ) : <p className="text-sm text-dark-500">Not synced yet.</p>}
+      <ErrorNote>{error ?? actionError}</ErrorNote>
+    </section>
   );
 }
 
@@ -76,12 +137,16 @@ function Users() {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left text-dark-500">
-            <tr><th className="py-2">Email</th><th>Plan</th><th>Role</th><th>Status</th><th className="text-right">Tokens 30d</th></tr>
+            <tr><th className="py-2">Email</th><th>Entra</th><th>Plan</th><th>Role</th><th>Status</th><th className="text-right">Tokens 30d</th></tr>
           </thead>
           <tbody className="divide-y divide-dark-800">
             {users?.map((u) => (
               <tr key={u.id}>
                 <td className="py-2 text-white">{u.email}</td>
+                <td className={u.entra_linked ? 'text-dark-300' : 'text-accent-red'}
+                    title={u.entra_linked ? undefined : 'Never signed in with Entra; the sync cannot see this account'}>
+                  {u.entra_linked ? 'linked' : 'not linked'}
+                </td>
                 <td>
                   <select className="input py-1" value={u.tier_id} onChange={(e) => change(u.id, { tier_id: e.target.value })}>
                     {tiers?.map((t) => <option key={t.id} value={t.id}>{t.display_name}</option>)}
@@ -95,7 +160,7 @@ function Users() {
                 <td>
                   <button className={`rounded px-2 py-1 ${u.status === 'active' ? 'text-accent-green' : 'text-accent-red'}`}
                           onClick={() => change(u.id, { status: u.status === 'active' ? 'disabled' : 'active' })}>
-                    {u.status}
+                    {u.status}{u.disabled_by === 'entra' && ' (Entra)'}
                   </button>
                 </td>
                 <td className="text-right tabular-nums">{Number(u.tokens_30d).toLocaleString()}</td>

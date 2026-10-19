@@ -1,14 +1,14 @@
-"""The system dashboard (pulsar-gui) on its own host, for signed-in portal admins.
+"""The system dashboard (pulsar-gui) on its own host, for every signed-in, active portal account.
 
 pulsar-gui has no login and uses absolute paths (/assets, /api, /ws), so it keeps its own
 host name, and portal-api stands in front of every request to it:
 
-    Portal:   POST /portal/dashboard/code          (admin, signed in) -> one-time code
+    Portal:   POST /portal/dashboard/code          (signed in) -> one-time code
     Browser:  GET  https://<dash host>/__auth?code  -> session cookie on the dash host only
     Browser:  anything else on the dash host        -> checked, then passed to pulsar-gui
 
 A request without a valid session is sent to the portal's /dashboard page, which gets a
-code and comes straight back, so a signed-in admin never sees a login.
+code and comes straight back, so a signed-in user never sees a login.
 """
 
 import asyncio
@@ -23,7 +23,7 @@ from starlette.responses import RedirectResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from portal_api.deps import Resources, User, admin_user, resources
+from portal_api.deps import Resources, User, current_user, resources
 
 router = APIRouter(prefix="/portal/dashboard", tags=["dashboard"])
 
@@ -37,7 +37,7 @@ FORWARD_RESPONSE = ("content-type", "content-encoding", "cache-control", "etag",
 
 
 @router.post("/code")
-async def code(request: Request, user: User = Depends(admin_user),
+async def code(request: Request, user: User = Depends(current_user),
                res: Resources = Depends(resources)):
     """A one-time code the browser trades for a dashboard session."""
     value = secrets.token_urlsafe(32)
@@ -66,8 +66,8 @@ class DashboardHost:
         await response(scope, receive, send)
 
 
-async def signed_in_admin(res: Resources, cookie_header: str) -> bool:
-    """The session is live and its user is still an active admin."""
+async def signed_in_user(res: Resources, cookie_header: str) -> bool:
+    """The session is live and its account is still active (any role: Tyler, 2026-10-19)."""
     cookie = SimpleCookie(cookie_header)
     if COOKIE not in cookie:
         return False
@@ -76,7 +76,7 @@ async def signed_in_admin(res: Resources, cookie_header: str) -> bool:
         return False
     row = await res.db.fetchrow(
         "select role, status from public.profiles where id = $1::uuid", user_id)
-    return row is not None and row["role"] == "admin" and row["status"] == "active"
+    return row is not None and row["status"] == "active" and row["role"] != "pending"
 
 
 def login_redirect(res: Resources) -> Response:
@@ -86,7 +86,7 @@ def login_redirect(res: Resources) -> Response:
 async def http_proxy(res: Resources, request: Request) -> Response:
     if request.url.path == "/__auth":
         return await start_session(res, request)
-    if not await signed_in_admin(res, request.headers.get("cookie", "")):
+    if not await signed_in_user(res, request.headers.get("cookie", "")):
         # Only page loads are redirected; the app's own calls just fail until it reloads.
         if request.method == "GET" and not request.url.path.startswith("/api/"):
             return login_redirect(res)
@@ -115,7 +115,7 @@ async def start_session(res: Resources, request: Request) -> Response:
 
 
 async def websocket_proxy(res: Resources, client: WebSocket):
-    if client.url.path != "/ws" or not await signed_in_admin(res, client.headers.get("cookie", "")):
+    if client.url.path != "/ws" or not await signed_in_user(res, client.headers.get("cookie", "")):
         await client.close(code=4401)
         return
     target = res.settings.dashboard_upstream.replace("http", "ws", 1) + "/ws"

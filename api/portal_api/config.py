@@ -29,16 +29,23 @@ class Settings:
     # runs; unset means off.
     dashboard_host: str = ""
     dashboard_upstream: str = ""
-    # Microsoft Entra ID, for the access and role sync (portal_api/entra_sync.py): the tenant, and
-    # an app registration allowed to read it through Microsoft Graph. Unset means no sync.
+    # Microsoft Entra ID, the source of accounts, roles and plans (portal_api/entra_sync.py): the
+    # tenant, an app registration that may read its groups and users, and the groups. Unset means
+    # no sync, and the admin tab manages accounts as before.
     entra_tenant_id: str = ""
     entra_client_id: str = ""
     entra_client_secret: str = ""
-    entra_sync_seconds: int = 900
+    entra_users_group: str = ""
+    entra_admins_group: str = ""
+    # (group id, tier id) in order of precedence: a member of several gets the first.
+    entra_plan_groups: tuple[tuple[str, str], ...] = ()
+    entra_default_tier: str = "free"
+    entra_sync_seconds: int = 300
 
     @property
     def entra_configured(self) -> bool:
-        return bool(self.entra_tenant_id and self.entra_client_id and self.entra_client_secret)
+        return bool(self.entra_tenant_id and self.entra_client_id and self.entra_client_secret
+                    and self.entra_users_group)
 
     @property
     def jwt_issuers(self) -> list[str]:
@@ -81,8 +88,23 @@ class Settings:
             entra_tenant_id=os.environ.get("PORTAL_ENTRA_TENANT_ID", ""),
             entra_client_id=os.environ.get("PORTAL_ENTRA_CLIENT_ID", ""),
             entra_client_secret=os.environ.get("PORTAL_ENTRA_CLIENT_SECRET", ""),
-            entra_sync_seconds=int(os.environ.get("PORTAL_ENTRA_SYNC_SECONDS", "900")),
+            entra_users_group=os.environ.get("PORTAL_ENTRA_USERS_GROUP", "").strip(),
+            entra_admins_group=os.environ.get("PORTAL_ENTRA_ADMINS_GROUP", "").strip(),
+            entra_plan_groups=_plan_groups(os.environ.get("PORTAL_ENTRA_PLAN_GROUPS", "")),
+            entra_default_tier=os.environ.get("PORTAL_ENTRA_DEFAULT_TIER", "free"),
+            entra_sync_seconds=int(os.environ.get("PORTAL_ENTRA_SYNC_SECONDS", "300")),
         )
+
+
+def _plan_groups(value: str) -> tuple[tuple[str, str], ...]:
+    """"<group id>=<tier id>,..." in order of precedence."""
+    pairs = []
+    for item in _split(value):
+        group, _, tier = item.partition("=")
+        if not group.strip() or not tier.strip():
+            raise ValueError(f"PORTAL_ENTRA_PLAN_GROUPS: expected group=tier, got {item!r}")
+        pairs.append((group.strip(), tier.strip()))
+    return tuple(pairs)
 
 
 def _split(value: str) -> list[str]:

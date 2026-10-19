@@ -1,4 +1,4 @@
-"""Entra ID: the sign-in trigger (migration 0006) and the Graph sync, against a fake Graph."""
+"""Entra groups as the source of accounts, roles and plans (migration 0006, portal_api/entra_sync.py)."""
 
 import json
 import os
@@ -14,164 +14,102 @@ from conftest import RUN, sql
 from portal_api import entra_sync
 from portal_api.config import Settings
 from portal_api.deps import User, admin_user
-from portal_api.entra_sync import DEFAULT_ACCESS, Directory, Profile, SyncRefused, plan
+from portal_api.entra_sync import Account, Directory, Person, SyncRefused, plan
 from portal_api.main import create_app
 
 TENANT = "590a429c-bbba-49f1-b2dd-7822998989ae"
-CLIENT = "cea584d7-6509-4f58-819f-d83183cfa54e"
-ROLE_IDS = {"Portal.Admin": "11111111-1111-1111-1111-111111111111",
-            "Portal.User": "22222222-2222-2222-2222-222222222222"}
+USERS, ADMINS, UNLIMITED = "g-users", "g-admins", "g-unlimited"
 
 
-def entra_sign_in(name: str, oid: str, roles: list[str] | None = None) -> str:
-    """What Supabase Auth writes at a first Entra sign-in: the user, then its identity."""
-    email = f"{name}-{RUN}@elytron.example"
-    uid = sql(f"insert into auth.users (id, aud, role, email) values (gen_random_uuid(), "
-              f"'authenticated', 'authenticated', '{email}') returning id;")
+def acct(oid=None, email=None, role="user", status="active", disabled_by=None, tier="free", local=False, id_=None):
+    return Account(id=id_ or str(uuid.uuid4()), email=email or f"{oid}@x", entra_oid=oid, role=role, status=status,
+                   disabled_by=disabled_by, tier_id=tier, local=local)
+
+
+def directory(members, admins=(), plans=None):
+    return Directory({o: Person(o, f"{o}@x", o.upper()) for o in members}, set(admins), dict(plans or {}))
+
+
+# --- plan --------------------------------------------------------------------------------
+
+def test_roles_and_plans_follow_groups():
+    d = directory(["a", "b", "c"], admins=["a"], plans={"a": "internal"})
+    changes, missing = plan([acct("a", role="user"), acct("b", role="admin", tier="internal")], d, "free")
+    by = {c.account.entra_oid: c for c in changes}
+    assert (by["a"].role, by["a"].tier_id) == ("admin", "internal")
+    assert (by["b"].role, by["b"].tier_id) == ("user", "free")
+    assert [p.oid for p in missing] == ["c"]
+
+
+def test_leavers_are_disabled_and_only_entra_disables_come_back():
+    d = directory(["keep", "back", "manual"], admins=["keep"])
+    changes, _ = plan([acct("keep", role="admin"), acct("gone"), acct("back", status="disabled", disabled_by="entra"),
+                       acct("manual", status="disabled", disabled_by="admin")], d, "free")
+    by = {c.account.entra_oid: (c.status, c.disabled_by) for c in changes}
+    assert by == {"gone": ("disabled", "entra"), "back": ("active", None)}
+
+
+def test_local_accounts_are_untouched_and_unlinked_accounts_match_by_email():
+    d = directory(["a"], admins=["a"])
+    changes, missing = plan([acct(None, email="a@x", role="user"), acct(None, email="bot@x", local=True)], d, "free")
+    assert len(changes) == 1 and changes[0].entra_oid == "a" and changes[0].role == "admin" and missing == []
+
+
+def test_refuses_an_empty_group_or_losing_every_admin():
+    with pytest.raises(SyncRefused, match="no enabled members"):
+        plan([acct("a", role="admin")], Directory({}), "free")
+    with pytest.raises(SyncRefused, match="no active admin"):
+        plan([acct("a", role="admin")], directory(["a"], admins=[]), "free")
+
+
+# --- the database: sign-in link and provisioning ------------------------------------------
+
+def entra_sign_in(email: str, oid: str) -> str:
+    uid = sql(f"insert into auth.users (id, aud, role, email) values (gen_random_uuid(), 'authenticated', "
+              f"'authenticated', '{email}') returning id;")
+    data = {"sub": uuid.uuid4().hex, "email": email, "custom_claims": {"oid": oid, "tid": TENANT}}
     sql(f"insert into auth.identities (provider_id, user_id, identity_data, provider) values "
-        f"('{uuid.uuid4().hex}', '{uid}', '{json.dumps(identity_data(email, oid, roles))}', 'azure');")
+        f"('{uuid.uuid4().hex}', '{uid}', '{json.dumps(data)}', 'azure');")
     return uid
 
 
-def identity_data(email: str, oid: str, roles: list[str] | None) -> dict:
-    claims = {"oid": oid, "tid": TENANT}
-    if roles is not None:
-        claims["roles"] = roles
-    return {"sub": uuid.uuid4().hex, "email": email, "custom_claims": claims}
-
-
-def sign_in_again(uid: str, oid: str, roles: list[str] | None) -> None:
-    sql(f"update auth.identities set identity_data = '{json.dumps(identity_data('x', oid, roles))}' "
-        f"where user_id = '{uid}';")
-
-
-def profile(uid: str) -> dict:
-    row = sql(f"select row_to_json(p) from (select role, status, disabled_by, entra_oid::text "
-              f"from public.profiles where id = '{uid}') p;")
-    return json.loads(row)
-
-
-# --- sign-in trigger ------------------------------------------------------------------
-
 def test_sign_in_links_the_entra_object_id():
     oid = str(uuid.uuid4())
-    uid = entra_sign_in("linked", oid)
-    assert profile(uid) == {"role": "user", "status": "active", "disabled_by": None, "entra_oid": oid}
+    uid = entra_sign_in(f"linked-{RUN}@elytron.example", oid)
+    assert sql(f"select entra_oid from public.profiles where id = '{uid}';") == oid
 
 
-def test_app_roles_in_the_token_set_the_portal_role():
-    oid = str(uuid.uuid4())
-    uid = entra_sign_in("roles", oid, ["Portal.Admin"])
-    assert profile(uid)["role"] == "admin"
-    sign_in_again(uid, oid, ["Portal.User"])
-    assert profile(uid)["role"] == "user"
-    # No roles claim (Default Access, or no app roles defined): the role is left as it is.
-    sql(f"update public.profiles set role = 'admin' where id = '{uid}';")
-    sign_in_again(uid, oid, None)
-    assert profile(uid)["role"] == "admin"
-
-
-def test_pending_accounts_stay_pending_and_user_metadata_is_ignored():
-    oid = str(uuid.uuid4())
-    uid = entra_sign_in("held", oid)
-    sql(f"update public.profiles set role = 'pending' where id = '{uid}';")
-    sign_in_again(uid, oid, ["Portal.Admin"])
-    assert profile(uid)["role"] == "pending"
-    # A user can write their own user_metadata; it must not make them admin.
-    sql(f"update public.profiles set role = 'user' where id = '{uid}';")
-    sql("""update auth.users set raw_user_meta_data = '{"custom_claims": {"roles": ["Portal.Admin"]}}' """
-        f"where id = '{uid}';")
-    assert profile(uid)["role"] == "user"
+def test_provisioning_creates_once_and_marks_the_email_confirmed():
+    oid, email = str(uuid.uuid4()), f"new-{RUN}@elytron.example"
+    a = sql(f"select public.entra_provision('{email.upper()}', 'New Person', '{oid}');")
+    b = sql(f"select public.entra_provision('{email}', 'New Person', '{oid}');")
+    assert a == b
+    assert sql(f"select email_confirmed_at is not null from auth.users where id = '{a}';") == "t"
+    assert sql(f"select entra_oid || ' ' || display_name from public.profiles where id = '{a}';") == f"{oid} New Person"
 
 
 def test_disabled_by_must_match_status():
-    uid = entra_sign_in("constraint", str(uuid.uuid4()))
+    uid = entra_sign_in(f"constraint-{RUN}@elytron.example", str(uuid.uuid4()))
     with pytest.raises(RuntimeError, match="profiles_disabled_by"):
         sql(f"update public.profiles set status = 'disabled' where id = '{uid}';")
 
 
-# --- plan -------------------------------------------------------------------------------
-
-def p(oid: str | None, role: str = "user", status: str = "active", disabled_by: str | None = None) -> Profile:
-    return Profile(id=oid or str(uuid.uuid4()), email=f"{oid}@x", entra_oid=oid, role=role,
-                   status=status, disabled_by=disabled_by)
-
-
-def test_plan_disables_and_re_enables_by_entra_only():
-    admin = p("a", role="admin")
-    d = Directory(assignment_required=True, manages_roles=False,
-                  enabled={"a": True, "off": False, "gone2": True, "back": True, "manual": True},
-                  assigned={"a": {""}, "off": {""}, "back": {""}, "manual": {""}})
-    changes = {c.profile.entra_oid: c for c in plan([
-        admin, p("off"), p("gone"), p("gone2"), p("back", status="disabled", disabled_by="entra"),
-        p("manual", status="disabled", disabled_by="admin"), p(None)], d)}
-    assert {k: (c.status, c.disabled_by, c.reason) for k, c in changes.items()} == {
-        "off": ("disabled", "entra", "disabled in Entra"),
-        "gone": ("disabled", "entra", "deleted in Entra"),
-        "gone2": ("disabled", "entra", "not assigned to the app"),
-        "back": ("active", None, "allowed in again"),
-    }
-
-
-def test_plan_without_required_assignment_lets_the_whole_tenant_in():
-    d = Directory(assignment_required=False, manages_roles=False, enabled={"u": True})
-    assert plan([p("u")], d) == []
-
-
-def test_plan_takes_admin_from_the_app_role():
-    d = Directory(assignment_required=True, manages_roles=True, enabled={"a": True, "b": True, "c": True, "x": True},
-                  assigned={"a": {"Portal.Admin"}, "b": {"Portal.User"}, "c": {"Portal.Admin"},
-                            "x": {"Portal.Admin"}})
-    changes = plan([p("a", role="admin"), p("b", role="admin"), p("c"), p("x", role="pending")], d)
-    assert {c.profile.entra_oid: c.role for c in changes} == {"b": "user", "c": "admin"}
-
-
-def test_plan_refuses_to_remove_the_last_admin_or_trust_an_empty_directory():
-    d = Directory(assignment_required=True, manages_roles=True, enabled={"a": True}, assigned={"a": {""}})
-    with pytest.raises(SyncRefused, match="no active admin"):
-        plan([p("a", role="admin")], d)
-    with pytest.raises(SyncRefused, match="no users"):
-        plan([p("a", role="admin")], Directory(assignment_required=False, manages_roles=False, enabled={}))
-
-
-# --- sync through a fake Microsoft Graph ------------------------------------------------
+# --- a whole sync against a fake Graph ----------------------------------------------------
 
 class FakeGraph:
     def __init__(self):
-        self.required = True
-        self.users: dict[str, bool] = {}
-        self.assignments: list[tuple[str, str, str]] = []  # (principalType, principalId, role value)
-        self.groups: dict[str, list[str]] = {}
+        self.groups: dict[str, list[dict]] = {USERS: [], ADMINS: [], UNLIMITED: []}
+
+    def add(self, group, oid, email, enabled=True):
+        self.groups[group].append({"id": oid, "mail": email, "userPrincipalName": email, "displayName": email.split("@")[0],
+                                   "accountEnabled": enabled})
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         path = urlparse(str(request.url)).path
-        if path == f"/{TENANT}/oauth2/v2.0/token":
-            assert request.content and b"client_credentials" in request.content
+        if path.endswith("/oauth2/v2.0/token"):
             return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
-        assert request.headers["authorization"] == "Bearer t"
-        if path == f"/v1.0/servicePrincipals(appId='{CLIENT}')":
-            return httpx.Response(200, json={
-                "id": "sp", "appRoleAssignmentRequired": self.required,
-                "appRoles": [{"id": i, "value": v, "isEnabled": True} for v, i in ROLE_IDS.items()]})
-        if path == "/v1.0/servicePrincipals/sp/appRoleAssignedTo":
-            value = [{"principalType": t, "principalId": pid, "appRoleId": ROLE_IDS.get(r, DEFAULT_ACCESS)}
-                     for t, pid, r in self.assignments]
-            # Two pages, to exercise @odata.nextLink.
-            if "page=2" in str(request.url):
-                return httpx.Response(200, json={"value": value[1:]})
-            return httpx.Response(200, json={"value": value[:1], "@odata.nextLink":
-                                             "https://graph.test/v1.0/servicePrincipals/sp/appRoleAssignedTo?page=2"})
-        if path.startswith("/v1.0/groups/"):
-            gid = path.split("/")[3]
-            return httpx.Response(200, json={"value": [{"id": m} for m in self.groups[gid]]})
-        if path == "/v1.0/users":
-            return httpx.Response(200, json={"value": [{"id": u, "accountEnabled": e} for u, e in self.users.items()]})
-        return httpx.Response(404, json={"error": path})
-
-
-@pytest.fixture(scope="module")
-def fake_graph():
-    return FakeGraph()
+        group = path.split("/")[3]
+        return httpx.Response(200, json={"value": self.groups.get(group, [])})
 
 
 @pytest.fixture(scope="module")
@@ -179,96 +117,74 @@ def settings():
     return Settings(database_url=os.environ["TEST_DATABASE_URL"], valkey_url="redis://127.0.0.1:1/0",
                     jwks_url="http://127.0.0.1:1/jwks", jwt_issuer="http://127.0.0.1:1/auth/v1",
                     cli_verify_url="https://account.example.test/cli", run_usage_consumer=False,
-                    entra_tenant_id=TENANT, entra_client_id=CLIENT, entra_client_secret="s")
-
-
-@pytest.fixture
-def graph(fake_graph, settings):
-    http = httpx.AsyncClient(transport=httpx.MockTransport(fake_graph.handler))
-    return entra_sync.Graph(http, settings, graph_url="https://graph.test/v1.0", login_url="https://login.test")
+                    entra_tenant_id=TENANT, entra_client_id="c", entra_client_secret="s",
+                    entra_users_group=USERS, entra_admins_group=ADMINS, entra_plan_groups=((UNLIMITED, "internal"),))
 
 
 @pytest.fixture(scope="module")
-def keeper(fake_graph):
-    """An admin who stays an admin, so the last-admin guard never trips by accident."""
-    oid = str(uuid.uuid4())
-    uid = entra_sign_in("keeper", oid, ["Portal.Admin"])
-    fake_graph.users[oid] = True
-    fake_graph.assignments.append(("User", oid, "Portal.Admin"))
-    return uid
+def unlimited_tier():
+    sql("insert into public.tiers (id, display_name) values ('internal', 'Internal') on conflict do nothing;")
 
 
-async def run_sync(graph) -> dict:
+def graph_for(fake, settings):
+    return entra_sync.Graph(httpx.AsyncClient(transport=httpx.MockTransport(fake.handler)), settings,
+                            graph_url="https://graph.test/v1.0", login_url="https://login.test")
+
+
+async def run_sync(fake, settings):
     db = await asyncpg.create_pool(os.environ["TEST_DATABASE_URL"], min_size=1, max_size=2)
     try:
-        return await entra_sync.sync_once(db, graph)
+        return await entra_sync.sync_once(db, graph_for(fake, settings), "free")
     finally:
         await db.close()
 
 
-async def test_sync_follows_entra(graph, fake_graph, keeper):
-    member, direct, leaver = (str(uuid.uuid4()) for _ in range(3))
-    group = str(uuid.uuid4())
-    m_id, d_id, l_id = entra_sign_in("member", member), entra_sign_in("direct", direct), entra_sign_in("leaver", leaver)
-    fake_graph.users |= {member: True, direct: True, leaver: True}
-    fake_graph.groups[group] = [member]
-    fake_graph.assignments += [("Group", group, "Portal.Admin"), ("User", direct, "Portal.User"),
-                               ("User", leaver, "")]
-
-    result = await run_sync(graph)
-    assert result["ok"] and result["manages_roles"] and result["message"] == "assignment required"
-    assert profile(m_id)["role"] == "admin"  # Portal.Admin through a group
-    assert (profile(d_id)["role"], profile(d_id)["status"]) == ("user", "active")
-
-    # The leaver is disabled in Entra: disabled here, by Entra; an admin's own disable is kept.
-    fake_graph.users[leaver] = False
-    sql(f"update public.profiles set status = 'disabled', disabled_by = 'admin' where id = '{d_id}';")
-    await run_sync(graph)
-    assert profile(l_id)["status"] == "disabled" and profile(l_id)["disabled_by"] == "entra"
-
-    # Back in Entra: the sync re-enables what it disabled, not what an admin disabled.
-    fake_graph.users[leaver] = True
-    result = await run_sync(graph)
-    assert profile(l_id)["status"] == "active" and profile(l_id)["disabled_by"] is None
-    assert profile(d_id)["status"] == "disabled"
-    assert sql("select ok from public.entra_sync;") == "t"
+def profile(email):
+    return json.loads(sql(f"select row_to_json(p) from (select role, status, disabled_by, tier_id, local "
+                          f"from public.profiles where lower(email) = lower('{email}')) p;") or "null")
 
 
-async def test_sync_records_a_refusal_and_changes_nothing(graph, fake_graph, keeper):
-    saved = list(fake_graph.assignments)
-    fake_graph.assignments = [a for a in saved if a[2] != "Portal.Admin"]
-    try:
-        before = sql("select string_agg(id || role || status, ',' order by id) from public.profiles;")
-        result = await run_sync(graph)
-        assert not result["ok"] and "no active admin" in result["message"]
-        assert sql("select string_agg(id || role || status, ',' order by id) from public.profiles;") == before
-        assert sql("select ok from public.entra_sync;") == "f"
-    finally:
-        fake_graph.assignments = saved
+async def test_sync_creates_sets_and_disables(settings, unlimited_tier):
+    fake = FakeGraph()
+    admin, user, leaver = (f"{n}-{RUN}@elytron.example" for n in ("boss", "staff", "leaver"))
+    a_oid, u_oid, l_oid = (str(uuid.uuid4()) for _ in range(3))
+    entra_sign_in(leaver, l_oid)                               # has signed in before, then leaves
+    for oid, email in ((a_oid, admin), (u_oid, user)):
+        fake.add(USERS, oid, email)
+    fake.add(ADMINS, a_oid, admin)
+    fake.add(UNLIMITED, a_oid, admin)
+
+    result = await run_sync(fake, settings)
+    assert result["ok"], result
+    assert profile(admin) == {"role": "admin", "status": "active", "disabled_by": None, "tier_id": "internal", "local": False}
+    assert profile(user) == {"role": "user", "status": "active", "disabled_by": None, "tier_id": "free", "local": False}
+    assert profile(leaver)["status"] == "disabled" and profile(leaver)["disabled_by"] == "entra"
+
+    fake.add(USERS, l_oid, leaver)                             # back in the group
+    await run_sync(fake, settings)
+    assert profile(leaver)["status"] == "active"
+
+    fake.groups[ADMINS] = []                                   # would leave no admin: refused, nothing changes
+    result = await run_sync(fake, settings)
+    assert not result["ok"] and "no active admin" in result["message"]
+    assert profile(admin)["role"] == "admin"
 
 
-def test_admin_endpoints(settings, fake_graph, keeper, monkeypatch):
+def test_admin_tab_refuses_editing_entra_people_but_not_local_accounts(settings, unlimited_tier, monkeypatch):
     async def no_loop(*_):
         pass
-
-    # The background loop would sync against the real Microsoft Graph before the fake is in.
     monkeypatch.setattr(entra_sync, "run", no_loop)
+    person = entra_sign_in(f"edited-{RUN}@elytron.example", str(uuid.uuid4()))
+    bot = sql(f"insert into auth.users (id, aud, role, email) values (gen_random_uuid(), 'authenticated', "
+              f"'authenticated', 'bot-{RUN}@elytron.example') returning id;")
+    sql(f"update public.profiles set local = true where id = '{bot}';")
     app = create_app(settings)
-    app.dependency_overrides[admin_user] = lambda: User(id=keeper, email="k", role="admin", status="active",
-                                                        tier_id="free")
+    app.dependency_overrides[admin_user] = lambda: User(id=str(uuid.uuid4()), email="a", role="admin",
+                                                        status="active", tier_id="internal")
     with TestClient(app) as c:
-        res = c.app.state.resources
-        res.entra.http = httpx.AsyncClient(transport=httpx.MockTransport(fake_graph.handler))
-        res.entra.graph_url, res.entra.login_url = "https://graph.test/v1.0", "https://login.test"
-
-        assert c.post("/portal/admin/entra/sync").json()["ok"]
+        r = c.patch(f"/portal/admin/users/{person}", json={"tier_id": "internal"})
+        assert r.status_code == 409 and "managed in Entra" in r.json()["detail"]
+        r = c.patch(f"/portal/admin/users/{bot}", json={"tier_id": "internal"})
+        assert r.status_code == 200 and r.json()["tier_id"] == "internal"
         status = c.get("/portal/admin/entra").json()
-        assert status["configured"] and status["last"]["ok"] and status["last"]["linked"] >= 1
-
-        target = entra_sign_in("patched", str(uuid.uuid4()))
-        changed = c.patch(f"/portal/admin/users/{target}", json={"status": "disabled"}).json()
-        assert changed["disabled_by"] == "admin"
-        changed = c.patch(f"/portal/admin/users/{target}", json={"status": "active"}).json()
-        assert changed["disabled_by"] is None
-        listed = c.get("/portal/admin/users", params={"q": f"patched-{RUN}"}).json()
-        assert listed[0]["entra_linked"] is True
+        assert status["configured"] and status["default_tier"] == "free" and status["plan_groups"] == ["internal"]

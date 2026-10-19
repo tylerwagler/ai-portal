@@ -14,22 +14,24 @@ type AdminUser = {
   tier_id: string;
   created_at: string;
   entra_linked: boolean;
+  local: boolean;
   tokens_30d: number;
   requests_30d: number;
 };
 
 type EntraSync = {
   configured: boolean;
+  default_tier: string;
+  plan_groups: string[];
   last: {
     ran_at: string;
     ok: boolean;
     message: string;
-    manages_roles: boolean;
-    linked: number;
-    unlinked: number;
+    members: number;
+    created: number;
     disabled: number;
     enabled: number;
-    role_changes: number;
+    changed: number;
   } | null;
 };
 
@@ -59,17 +61,18 @@ const LIMIT_FIELDS: [keyof Tier, string][] = [
 export default function Admin() {
   const { me } = useMe();
   if (me.user.role !== 'admin') return <Navigate to="/" replace />;
+  const entra = useApi<EntraSync>('/admin/entra');
   return (
     <>
-      <Entra />
-      <Users />
+      <Entra entra={entra} />
+      <Users entraManaged={!!entra.data?.configured} />
       <Tiers />
     </>
   );
 }
 
-function Entra() {
-  const { data, error, reload } = useApi<EntraSync>('/admin/entra');
+function Entra({ entra }: { entra: ReturnType<typeof useApi<EntraSync>> }) {
+  const { data, error, reload } = entra;
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string>();
   if (!data?.configured) return error ? <ErrorNote>{error}</ErrorNote> : null;
@@ -97,13 +100,15 @@ function Entra() {
         </button>
       </div>
       <p className="text-sm text-dark-500">
-        Accounts disabled, deleted or unassigned in Entra are disabled here, with their API keys.
-        {last?.manages_roles && ' Admin comes from the Portal.Admin app role; role changes here last until the next sync.'}
+        People, roles and plans come from Entra groups: <b>AI Users</b> (an account; leaving disables it,
+        with its API keys), <b>AI Admins</b> (admin) and the <b>AI Plan</b> groups
+        (otherwise plan <b>{data.default_tier}</b>). Change them in Entra; the portal follows within minutes.
+        Service accounts marked local are managed here.
       </p>
       {last ? (
         <p className={`text-sm ${last.ok ? 'text-dark-300' : 'text-accent-red'}`}>
           Last sync {new Date(last.ran_at).toLocaleString()}: {last.message}
-          {last.ok && ` · ${last.linked} linked, ${last.unlinked} not linked · ${last.disabled} disabled, ${last.enabled} re-enabled, ${last.role_changes} role changes`}
+          {last.ok && ` · ${last.members} members · ${last.created} created, ${last.disabled} disabled, ${last.enabled} re-enabled, ${last.changed} changed`}
         </p>
       ) : <p className="text-sm text-dark-500">Not synced yet.</p>}
       <ErrorNote>{error ?? actionError}</ErrorNote>
@@ -111,7 +116,7 @@ function Entra() {
   );
 }
 
-function Users() {
+function Users({ entraManaged }: { entraManaged: boolean }) {
   const [q, setQ] = useState('');
   const { data: users, error, reload } = useApi<AdminUser[]>(`/admin/users?q=${encodeURIComponent(q)}`);
   const { data: tiers } = useApi<Tier[]>('/admin/tiers');
@@ -137,16 +142,24 @@ function Users() {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left text-dark-500">
-            <tr><th className="py-2">Email</th><th>Entra</th><th>Plan</th><th>Role</th><th>Status</th><th className="text-right">Tokens 30d</th></tr>
+            <tr><th className="py-2">Email</th><th>Source</th><th>Plan</th><th>Role</th><th>Status</th><th className="text-right">Tokens 30d</th></tr>
           </thead>
           <tbody className="divide-y divide-dark-800">
-            {users?.map((u) => (
+            {users?.map((u) => entraManaged && !u.local ? (
               <tr key={u.id}>
                 <td className="py-2 text-white">{u.email}</td>
-                <td className={u.entra_linked ? 'text-dark-300' : 'text-accent-red'}
-                    title={u.entra_linked ? undefined : 'Never signed in with Entra; the sync cannot see this account'}>
-                  {u.entra_linked ? 'linked' : 'not linked'}
+                <td className="text-dark-300" title="Role, plan and status follow Entra groups">Entra</td>
+                <td className="text-dark-300">{tiers?.find((t) => t.id === u.tier_id)?.display_name ?? u.tier_id}</td>
+                <td className="text-dark-300">{u.role}</td>
+                <td className={u.status === 'active' ? 'text-accent-green' : 'text-accent-red'}>
+                  {u.status}{u.disabled_by === 'entra' && ' (not in AI Users)'}
                 </td>
+                <td className="text-right tabular-nums">{Number(u.tokens_30d).toLocaleString()}</td>
+              </tr>
+            ) : (
+              <tr key={u.id}>
+                <td className="py-2 text-white">{u.email}</td>
+                <td className="text-dark-500">{u.local ? 'local' : 'portal'}</td>
                 <td>
                   <select className="input py-1" value={u.tier_id} onChange={(e) => change(u.id, { tier_id: e.target.value })}>
                     {tiers?.map((t) => <option key={t.id} value={t.id}>{t.display_name}</option>)}

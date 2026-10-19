@@ -1,4 +1,8 @@
-"""Admin: accounts, plans and the Entra sync. Changes reach the gate within its 30-second cache."""
+"""Admin: accounts, plans and the Entra sync. Changes reach the gate within its 30-second cache.
+
+With the Entra sync configured, people's role, plan and status come from Entra groups: changing
+them here is refused (change the group membership instead). Local accounts (service accounts) and
+the plans themselves are still managed here."""
 
 from typing import Literal
 
@@ -36,7 +40,7 @@ async def list_users(q: str = "", limit: int = 100, _: User = Depends(admin_user
                      res: Resources = Depends(resources)):
     rows = await res.db.fetch(
         """select p.id::text, p.email, p.display_name, p.role, p.status, p.disabled_by, p.tier_id,
-                  p.created_at, p.entra_oid is not null as entra_linked,
+                  p.created_at, p.entra_oid is not null as entra_linked, p.local,
                   coalesce(sum(r.billable_tokens), 0)::bigint as tokens_30d,
                   coalesce(sum(r.requests), 0)::bigint as requests_30d
            from public.profiles p
@@ -51,6 +55,13 @@ async def change_user(user_id: str, body: UserChange, admin: User = Depends(admi
                       res: Resources = Depends(resources)):
     if user_id == admin.id and (body.role not in (None, "admin") or body.status == "disabled"):
         raise HTTPException(400, "you cannot remove your own admin access")
+    if res.entra is not None:
+        local = await res.db.fetchval("select local from public.profiles where id = $1::uuid", user_id)
+        if local is None:
+            raise HTTPException(404, "no such user")
+        if not local:
+            raise HTTPException(409, "managed in Entra: change this person's groups (AI Users, AI Admins, "
+                                     "AI Plan - ...) in Entra; the portal follows within minutes")
     changes = body.model_dump(exclude_none=True)
     if not changes:
         raise HTTPException(400, "nothing to change")
@@ -91,11 +102,13 @@ async def put_tier(tier_id: str, body: Tier, _: User = Depends(admin_user), res:
 @router.get("/entra")
 async def entra_status(_: User = Depends(admin_user), res: Resources = Depends(resources)):
     row = await res.db.fetchrow("select * from public.entra_sync")
-    return {"configured": res.entra is not None, "last": dict(row) if row else None}
+    s = res.settings
+    return {"configured": res.entra is not None, "last": dict(row) if row else None,
+            "default_tier": s.entra_default_tier, "plan_groups": [t for _, t in s.entra_plan_groups]}
 
 
 @router.post("/entra/sync")
 async def entra_sync_now(_: User = Depends(admin_user), res: Resources = Depends(resources)):
     if res.entra is None:
         raise HTTPException(409, "the Entra sync is not configured")
-    return await entra_sync.sync_once(res.db, res.entra)
+    return await entra_sync.sync_once(res.db, res.entra, res.settings.entra_default_tier)

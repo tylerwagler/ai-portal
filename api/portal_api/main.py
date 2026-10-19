@@ -50,7 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if s.run_usage_consumer:
             tasks.append(asyncio.create_task(usage_consumer.run(db, valkey)))
         if graph:
-            tasks.append(asyncio.create_task(entra_sync.run(db, graph, s.entra_sync_seconds)))
+            tasks.append(asyncio.create_task(entra_sync.run(db, graph, s.entra_sync_seconds, s.entra_default_tier)))
         try:
             yield
         finally:

@@ -41,6 +41,9 @@ class Settings:
     entra_plan_groups: tuple[tuple[str, str], ...] = ()
     entra_default_tier: str = "free"
     entra_sync_seconds: int = 300
+    # Open WebUI's schema in the same database: the sync also sets its users' roles (admin from the
+    # admins group, pending once the portal account is disabled). Unset means off.
+    openwebui_schema: str = ""
 
     @property
     def entra_configured(self) -> bool:
@@ -93,6 +96,7 @@ class Settings:
             entra_plan_groups=_plan_groups(os.environ.get("PORTAL_ENTRA_PLAN_GROUPS", "")),
             entra_default_tier=os.environ.get("PORTAL_ENTRA_DEFAULT_TIER", "free"),
             entra_sync_seconds=int(os.environ.get("PORTAL_ENTRA_SYNC_SECONDS", "300")),
+            openwebui_schema=os.environ.get("PORTAL_OPENWEBUI_SCHEMA", "").strip(),
         )
 
 

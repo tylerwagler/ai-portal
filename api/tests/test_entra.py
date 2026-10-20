@@ -1,5 +1,6 @@
 """Entra groups as the source of accounts, roles and plans (migration 0006, portal_api/entra_sync.py)."""
 
+import dataclasses
 import json
 import os
 import uuid
@@ -14,7 +15,7 @@ from conftest import RUN, sql
 from portal_api import entra_sync
 from portal_api.config import Settings
 from portal_api.deps import User, admin_user
-from portal_api.entra_sync import Account, Directory, Person, SyncRefused, plan
+from portal_api.entra_sync import Account, Directory, Person, SyncRefused, WebUser, openwebui_plan, plan
 from portal_api.main import create_app
 
 TENANT = "590a429c-bbba-49f1-b2dd-7822998989ae"
@@ -60,6 +61,19 @@ def test_refuses_an_empty_group_or_losing_every_admin():
         plan([acct("a", role="admin")], Directory({}), "free")
     with pytest.raises(SyncRefused, match="no active admin"):
         plan([acct("a", role="admin")], directory(["a"], admins=[]), "free")
+
+
+def test_openwebui_roles_follow_accounts():
+    accounts = {a.id: a for a in (acct("o1", role="admin", id_="boss"), acct("o2", id_="staff"),
+                                  acct("o3", status="disabled", disabled_by="entra", id_="gone"),
+                                  acct(None, role="admin", local=True, id_="bot"))}
+    users = [WebUser("1", "boss", "user", "boss"), WebUser("2", "staff", "admin", "staff"),
+             WebUser("3", "gone", "user", "gone"), WebUser("4", "stray", "admin", None),
+             WebUser("5", "kb-sync", "user", None), WebUser("6", "bot", "admin", "bot")]
+    assert {u.id: role for u, role in openwebui_plan(users, accounts)} == {
+        "1": "admin", "2": "user", "3": "pending", "4": "user", "6": "user"}
+    with pytest.raises(SyncRefused, match="without an admin"):
+        openwebui_plan([WebUser("2", "staff", "admin", "staff")], accounts)
 
 
 # --- the database: sign-in link and provisioning ------------------------------------------
@@ -168,6 +182,36 @@ async def test_sync_creates_sets_and_disables(settings, unlimited_tier):
     result = await run_sync(fake, settings)
     assert not result["ok"] and "no active admin" in result["message"]
     assert profile(admin)["role"] == "admin"
+
+
+@pytest.fixture(scope="module")
+def openwebui():
+    """A stand-in for Open WebUI's user table, granted as migration 0007 grants the real one."""
+    schema = f"owui_{RUN}"
+    sql(f'create schema {schema}; create table {schema}."user" (id text primary key, email text, role text, '
+        f'oauth json, updated_at bigint); grant usage on schema {schema} to portal_api; '
+        f'grant select (id, email, role, oauth), update (role, updated_at) on {schema}."user" to portal_api;')
+    yield schema
+    sql(f"drop schema {schema} cascade;")
+
+
+async def test_sync_sets_openwebui_roles(settings, unlimited_tier, openwebui):
+    fake = FakeGraph()
+    boss, staff, leaver = (f"ow-{n}-{RUN}@elytron.example" for n in ("boss", "staff", "leaver"))
+    oids = {e: str(uuid.uuid4()) for e in (boss, staff, leaver)}
+    uids = {e: entra_sign_in(e, oid) for e, oid in oids.items()}
+    for e in (boss, staff):
+        fake.add(USERS, oids[e], e)
+    fake.add(ADMINS, oids[boss], boss)
+    for i, (email, role, sub) in enumerate([(boss, "user", uids[boss]), (staff, "admin", uids[staff]),
+                                            (leaver, "user", uids[leaver]), ("stray@gmail.example", "admin", None)]):
+        oauth = json.dumps({"oidc": {"sub": sub}}) if sub else "null"
+        sql(f"""insert into {openwebui}."user" values ('w{i}', '{email}', '{role}', '{oauth}', 0);""")
+
+    result = await run_sync(fake, dataclasses.replace(settings, openwebui_schema=openwebui))
+    assert result["ok"] and "Open WebUI: 4 roles changed" in result["message"], result
+    roles = sql(f"""select string_agg(role, ' ' order by id) from {openwebui}."user";""")
+    assert roles == "admin user pending user"
 
 
 def test_admin_tab_refuses_editing_entra_people_but_not_local_accounts(settings, unlimited_tier, monkeypatch):

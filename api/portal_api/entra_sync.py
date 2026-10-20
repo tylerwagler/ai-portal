@@ -20,11 +20,18 @@ Local accounts (service accounts, profiles.local) are not touched. An account ma
 user by object id, else (before their first sign-in) by email. A run that would leave no active
 admin, or that reads an empty users group, changes nothing.
 
+With PORTAL_OPENWEBUI_SCHEMA set it then sets Open WebUI's roles from the accounts, in the same
+transaction: a user linked to an account (their OIDC sub is the account id) is admin if the account
+is an active admin, user if it is active, and pending (locked out, sessions included) if it is
+disabled. A user linked to no account may not be admin, and becomes user. Open WebUI reads the role
+from its database on every request; its own role management (OAuth roles claim) stays off.
+
 Graph application permissions (the AI Portal app): GroupMember.Read.All, User.Read.All.
 """
 
 import asyncio
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 
@@ -132,6 +139,33 @@ class Graph:
         return d
 
 
+@dataclass
+class WebUser:
+    id: str
+    email: str
+    role: str
+    sub: str | None     # the portal account id, for users who signed in through it
+
+
+def openwebui_plan(users: list[WebUser], accounts: dict[str, Account]) -> list[tuple[WebUser, str]]:
+    """(Open WebUI user, the role it should have) for every role to change."""
+    changes = []
+    for u in users:
+        a = accounts.get(u.sub or "")
+        if a is not None and not a.local:
+            role = "pending" if a.status != "active" else "admin" if a.role == "admin" else "user"
+        elif u.role == "admin":
+            role = "user"
+        else:
+            continue
+        if role != u.role:
+            changes.append((u, role))
+    wanted = {u.id: u.role for u in users} | {u.id: role for u, role in changes}
+    if users and "admin" not in wanted.values():
+        raise SyncRefused("the sync would leave Open WebUI without an admin; check the admins group")
+    return changes
+
+
 def plan(accounts: list[Account], d: Directory, default_tier: str) -> tuple[list[Change], list[Person]]:
     """(changes to existing accounts, members who need an account)."""
     if not d.members:
@@ -201,6 +235,15 @@ async def sync_once(db: asyncpg.Pool, graph: Graph, default_tier: str) -> dict:
                           disabled=sum(c.status == "disabled" and c.account.status == "active" for c in changes),
                           enabled=sum(c.status == "active" and c.account.status == "disabled" for c in changes),
                           changed=len(changes))
+            if graph.s.openwebui_schema:
+                try:
+                    async with conn.transaction():
+                        n = await sync_openwebui(conn, graph.s.openwebui_schema)
+                    if n:
+                        result["message"] += f"; Open WebUI: {n} role{'s' * (n != 1)} changed"
+                except (SyncRefused, asyncpg.PostgresError) as e:
+                    log.error("entra sync: Open WebUI roles not synced: %s", e)
+                    result.update(ok=False, message=f"accounts in step; Open WebUI roles not synced: {e}")
             await record(conn, result)
     except (SyncRefused, RuntimeError, httpx.HTTPError) as e:
         log.error("entra sync refused or failed: %s", e)
@@ -208,6 +251,25 @@ async def sync_once(db: asyncpg.Pool, graph: Graph, default_tier: str) -> dict:
         async with db.acquire() as conn:
             await record(conn, result)
     return result
+
+
+async def sync_openwebui(conn: asyncpg.Connection, schema: str) -> int:
+    """Open WebUI's roles from the accounts (as they now are). Returns how many changed."""
+    if not re.fullmatch(r"[a-z_][a-z0-9_]*", schema):
+        raise SyncRefused(f"bad Open WebUI schema name {schema!r}")
+    table = f'{schema}."user"'
+    users = [WebUser(**dict(r)) for r in await conn.fetch(
+        f"select id, email, role, oauth -> 'oidc' ->> 'sub' as sub from {table}")]
+    accounts = {r["id"]: Account(**dict(r)) for r in await conn.fetch(
+        "select id::text, email, entra_oid::text, role, status, disabled_by, tier_id, local from public.profiles")}
+    changed = 0
+    for u, role in openwebui_plan(users, accounts):
+        # Only if nobody changed it meanwhile (Open WebUI writes its user rows all the time).
+        if await conn.fetchval(f"update {table} set role = $2, updated_at = extract(epoch from now())::bigint "
+                               f"where id = $1 and role = $3 returning id", u.id, role, u.role):
+            changed += 1
+            log.info("entra sync: Open WebUI %s %s -> %s", u.email, u.role, role)
+    return changed
 
 
 async def record(conn: asyncpg.Connection, result: dict) -> None:
